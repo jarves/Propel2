@@ -102,6 +102,10 @@ CREATE INDEX bar_FK ON foo (bar1);
 
 CREATE INDEX baz_FK ON foo (baz3);
 
+CREATE UNIQUE INDEX foo2_U_1 ON foo2 (bar);
+
+COMMENT ON INDEX foo2_U_1 IS 'propel:created_through_foreign_key';
+
 ALTER TABLE foo ADD CONSTRAINT foo1_FK_1
     FOREIGN KEY (bar1)
     REFERENCES foo2 (bar);
@@ -170,11 +174,19 @@ END;
 
 ALTER TABLE foo1 DROP CONSTRAINT foo1_FK_1;
 
+CREATE UNIQUE INDEX foo2_U_1 ON foo2 (baz);
+
+COMMENT ON INDEX foo2_U_1 IS 'propel:created_through_foreign_key';
+
 ALTER TABLE foo1 ADD CONSTRAINT foo1_FK_3
     FOREIGN KEY (baz)
     REFERENCES foo2 (baz);
 
 ALTER TABLE foo1 DROP CONSTRAINT foo1_FK_2;
+
+CREATE UNIQUE INDEX foo2_U_1 ON foo2 (bar,id);
+
+COMMENT ON INDEX foo2_U_1 IS 'propel:created_through_foreign_key';
 
 ALTER TABLE foo1 ADD CONSTRAINT foo1_FK_2
     FOREIGN KEY (bar,id)
@@ -196,6 +208,10 @@ ALTER TABLE foo1 DROP CONSTRAINT foo1_FK_1;
 END;
         $this->assertEquals($expected, $this->getPlatform()->getModifyTableForeignKeysDDL($tableDiff));
         $expected = <<<END
+
+CREATE UNIQUE INDEX foo2_U_1 ON foo2 (bar);
+
+COMMENT ON INDEX foo2_U_1 IS 'propel:created_through_foreign_key';
 
 ALTER TABLE foo1 ADD CONSTRAINT foo1_FK_1
     FOREIGN KEY (bar)

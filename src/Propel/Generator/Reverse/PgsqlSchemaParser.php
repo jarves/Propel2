@@ -403,7 +403,8 @@ class PgsqlSchemaParser extends AbstractSchemaParser
             DISTINCT ON(cls.relname)
             cls.relname as idxname,
             indkey,
-            indisunique
+            indisunique,
+            idx.*
             FROM pg_index idx
             JOIN pg_class cls ON cls.oid=indexrelid
             WHERE indrelid = ? AND NOT indisprimary
@@ -422,6 +423,19 @@ class PgsqlSchemaParser extends AbstractSchemaParser
         while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
             $name = $row['idxname'];
             $unique = (in_array($row['indisunique'], ['t', true, 1, '1']) ? true : false);
+
+            /**
+             * check if created through foreignKey
+             * @see src/Propel/Generator/Platform/PgsqlPlatform.php +240
+             * Since we won't generate a useless diff, we skip this indexes.
+             */
+            $commentStmt = $this->dbh->prepare("SELECT obj_description(?, ?)");
+            $commentStmt->execute([$row['indexrelid'], 'pg_class']);
+            $comment = $commentStmt->fetchColumn();
+            if ('propel:created_through_foreign_key' === $comment) {
+                continue;
+            }
+
             if (!isset($indexes[$name])) {
                 if ($unique) {
                     $indexes[$name] = new Unique($name);

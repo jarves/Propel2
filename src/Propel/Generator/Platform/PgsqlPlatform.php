@@ -15,6 +15,7 @@ use Propel\Generator\Model\Column;
 use Propel\Generator\Model\Database;
 use Propel\Generator\Model\Diff\TableDiff;
 use Propel\Generator\Model\Domain;
+use Propel\Generator\Model\ForeignKey;
 use Propel\Generator\Model\Index;
 use Propel\Generator\Model\IdMethod;
 use Propel\Generator\Model\PropelTypes;
@@ -223,17 +224,34 @@ SET search_path TO public;
     {
         $ret = '';
         foreach ($table->getForeignKeys() as $fk) {
-            //PostgreSQL requires the keys of the foreignTable of a foreignKeys to be unique.
-            //check if there is already a unique constraint with exactly
-            //the keys of the FK, if not define it.
-            if ($fk->getForeignTable() && !$fk->getForeignTable()->isUnique($fk->getForeignColumnObjects())) {
-                $unique = new Unique();
-                $unique->setTable($fk->getForeignTable());
-                $unique->setColumns($fk->getForeignColumnObjects());
-                $ret .= $this->getAddIndexDDL($unique);
-            }
-
             $ret .= $this->getAddForeignKeyDDL($fk);
+        }
+
+        return $ret;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getAddForeignKeyDDL(ForeignKey $fk)
+    {
+        $ret = parent::getAddForeignKeyDDL($fk);
+
+        //PostgreSQL requires the keys of the foreignTable to be unique.
+        //check if there is already a unique constraint with exactly
+        //the keys of the FK, if not define it.
+        if ($ret && $fk->getForeignTable() && !$fk->getForeignTable()->isUnique($fk->getForeignColumnObjects())) {
+            $unique = new Unique();
+            $unique->setTable($fk->getForeignTable());
+            $unique->setColumns($fk->getForeignColumnObjects());
+            $comment = sprintf("
+COMMENT ON INDEX %s IS 'propel:created_through_foreign_key';
+",
+                $unique->getFQName());
+
+            $ret = $this->getAddIndexDDL($unique)
+                . $comment
+                . $ret;
         }
 
         return $ret;
