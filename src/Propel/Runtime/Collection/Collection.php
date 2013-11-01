@@ -271,6 +271,15 @@ class Collection extends \ArrayObject implements \Serializable
     }
 
     /**
+     * Prepend one  elements to the end of the collection
+     *
+     * @param  mixed   $value the element to prepend
+     */
+    public function push($value) {
+        $this[] = $value;
+    }
+
+    /**
      * Prepend one or more elements to the beginning of the collection
      *
      * @param  mixed   $value the element to prepend
