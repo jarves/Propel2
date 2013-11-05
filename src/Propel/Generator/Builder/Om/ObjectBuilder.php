@@ -4604,6 +4604,16 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
         }
     }
 
+    /**
+     * Extracts some useful information from a CrossForeignKeys object.
+     *
+     * @param CrossForeignKeys $crossFKs
+     * @param ForeignKey $crossFKToIgnore
+     * @param array $signature
+     * @param array $shortSignature
+     * @param array $normalizedShortSignature
+     * @param array $phpDoc
+     */
     protected function extractCrossInformation(CrossForeignKeys $crossFKs, ForeignKey $crossFKToIgnore = null,
                                                &$signature, &$shortSignature, &$normalizedShortSignature, &$phpDoc)
     {
@@ -4720,6 +4730,13 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
         }
     }
 
+    /**
+     * Returns a function signature comma separated.
+     *
+     * @param CrossForeignKeys $crossFKs
+     * @param string $excludeSignatureItem Which variable to exclude.
+     * @return string
+     */
     protected function getCrossFKGetterSignature(CrossForeignKeys $crossFKs, $excludeSignatureItem) {
         list (, $getSignature) = $this->getCrossFKAddMethodInformation($crossFKs);
         $getSignature = explode(', ', $getSignature);
@@ -4826,6 +4843,11 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
 ";
     }
 
+    /**
+     * @param CrossForeignKeys $crossFKs
+     * @param ForeignKey $excludeFK
+     * @return string
+     */
     protected function getCrossRefFKGetterName(CrossForeignKeys $crossFKs, ForeignKey $excludeFK) {
         $names = [];
 
@@ -4845,6 +4867,11 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
         return $this->getPluralizer()->getPluralForm($name);
     }
 
+    /**
+     * @param CrossForeignKeys $crossFKs
+     * @param ForeignKey $excludeFK
+     * @return string
+     */
     protected function getCrossRefFKRemoveObjectNames(CrossForeignKeys $crossFKs, ForeignKey $excludeFK) {
         $names = [];
 
