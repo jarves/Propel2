@@ -123,10 +123,10 @@
     public function hashCode()
     {
         if (null !== $this->getPrimaryKey()) {
-            return crc32(serialize($this->getPrimaryKey()));
+            return crc32(json_encode($this->getPrimaryKey(), JSON_UNESCAPED_UNICODE));
         }
 
-        return crc32(serialize(clone $this));
+        return spl_object_hash($this);
     }
 
     /**

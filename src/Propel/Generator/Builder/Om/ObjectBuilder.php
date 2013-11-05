@@ -414,14 +414,6 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
         }
 
         // many-to-many relationships
-//        var_dump('crossFks', $table->getName(), count($table->getCrossFks()));
-//        if ($table->getName() === 'table617_user') {
-//            foreach ($table->getCrossFks() as $fkList) {
-//                var_dump(' crossFK: ' . $fkList[1]->getName());
-//                $crossFK = $fkList[1];
-//            }
-//        }
-        //var_dump('BuildFKAttributes for ' . $this->getTable()->getName());
         foreach ($table->getCrossFks() as $crossFKs) {
             $this->addCrossFKAttributes($script, $crossFKs);
         }
@@ -3507,7 +3499,7 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
             \$this->{$collName}Partial = true;
         }
 
-        if (!in_array(\$l, \$this->{$collName}->getArrayCopy(), true)) { // only add it if the **same** object is not already associated
+        if (!\$this->{$collName}->contains(\$l)) {
             \$this->doAdd" . $this->getRefFKPhpNameAffix($refFK, $plural = false) . "(\$l);
         }
 
@@ -3851,6 +3843,11 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
      * @var ObjectCombinationCollection Cross CombinationCollection to store aggregation of $names combinations.
      */
     protected \$combination" . ucfirst($this->getCrossFKsVarName($crossFKs)) . ";
+
+    /**
+     * @var bool
+     */
+    protected \$combination" . ucfirst($this->getCrossFKsVarName($crossFKs)) . "Partial;
 ";
         }
 
@@ -3863,6 +3860,11 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
      * @var        {$className}[] Cross Collection to store aggregation of $className objects.
      */
     protected \$coll" . $this->getFKPhpNameAffix($fk, true) . ";
+
+    /**
+     * @var bool
+     */
+    protected \$coll" . $this->getFKPhpNameAffix($fk, true) . "Partial;
 ";
 
         }
@@ -3933,8 +3935,6 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
             if (\$this->$scheduledForDeletionVarName !== null) {
                 if (!\$this->{$scheduledForDeletionVarName}->isEmpty()) {
                     \$pks = array();";
-                    //foreach (\$this->{$lowerRelatedName}ScheduledForDeletion->getPrimaryKeys(false) as \$remotePk) {
-
         if ($multipleFks) {
             $script .= "
                     foreach (\$this->{$scheduledForDeletionVarName} as \$combination) {
@@ -3995,8 +3995,6 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
         } else {
 
             $script .= "
-                    //foreach (\$this->$scheduledForDeletionVarName as \$entry) {
-                    \$pk = \$this->getPrimaryKey();
                     foreach (\$this->{$scheduledForDeletionVarName} as \$entry) {
                         \$entryPk = [];
 ";
@@ -4035,40 +4033,58 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
                 }
 ";
 
-        foreach ($crossFKs->getCrossForeignKeys() as $fk) {
-            $relatedName            = $this->getFKPhpNameAffix($fk, true);
-            $lowerSingleRelatedName = lcfirst($this->getFKPhpNameAffix($fk, false));
+        $script .= "
+            }
+";
+
+        if ($multipleFks) {
+            $combineVarName = 'combination' . ucfirst($this->getCrossFKsVarName($crossFKs));
+            $script .= "
+            if (null !== \$this->$combineVarName) {
+                foreach (\$this->$combineVarName as \$combination) {
+";
+
+            $combinationIdx = 0;
+            foreach ($crossFKs->getCrossForeignKeys() as $crossFK) {
+                $script .= "
+                    //\$combination[$combinationIdx] = {$crossFK->getForeignTable()->getPhpName()} ({$crossFK->getName()})
+                    if (\$combination[$combinationIdx]->isModified()) {
+                        \$combination[$combinationIdx]->save(\$con);
+                    }
+                ";
+
+                $combinationIdx++;
+            }
+
+            foreach ($crossFKs->getUnclassifiedPrimaryKeys() as $pk) {
+                $script .= "
+                    //\$combination[$combinationIdx] = {$pk->getPhpName()}; Nothing to save.";
+                    $combinationIdx++;
+            }
 
             $script .= "
-                foreach (\$this->get{$relatedName}() as \${$lowerSingleRelatedName}) {
+                }
+            }
+";
+        } else {
+
+            foreach ($crossFKs->getCrossForeignKeys() as $fk) {
+                $relatedName            = $this->getFKPhpNameAffix($fk, true);
+                $lowerSingleRelatedName = lcfirst($this->getFKPhpNameAffix($fk, false));
+
+                $script .= "
+            if (\$this->coll{$relatedName}) {
+                foreach (\$this->coll{$relatedName} as \${$lowerSingleRelatedName}) {
                     if (\${$lowerSingleRelatedName}->isModified()) {
                         \${$lowerSingleRelatedName}->save(\$con);
                     }
                 }
-";
-        }
-
-        $script .= "
-            } else {
-";
-
-        foreach ($crossFKs->getCrossForeignKeys() as $fk) {
-            $relatedName            = $this->getFKPhpNameAffix($fk, true);
-            $lowerSingleRelatedName = lcfirst($this->getFKPhpNameAffix($fk, false));
-
-            $script .= "
-                if (\$this->coll{$relatedName}) {
-                    foreach (\$this->coll{$relatedName} as \${$lowerSingleRelatedName}) {
-                        if (\${$lowerSingleRelatedName}->isModified()) {
-                            \${$lowerSingleRelatedName}->save(\$con);
-                        }
-                    }
-                }
-";
-        }
-
-        $script .= "
             }
+";
+            }
+        }
+
+        $script .= "
 ";
 
     }
@@ -4114,12 +4130,14 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
 
             $this->addCrossFKClear($script, $crossFKs);
             $this->addCrossFKInit($script, $crossFKs);
+            $this->addCrossFKisLoaded($script, $crossFKs);
             $this->addCrossFKGet($script, $crossFKs);
             $this->addCrossFKSet($script, $crossFKs);
             $this->addCrossFKCount($script, $crossFKs);
             $this->addCrossFKAdd($script, $crossFKs);
             $this->addCrossFKDoAdd($script, $crossFKs);
             $this->addCrossFKRemove($script, $crossFKs);
+            //$this->addCrossFKRemoves($script, $crossFKs);
         }
     }
 
@@ -4229,6 +4247,7 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
     public function init$relCol()
     {
         \$this->$collName = new $collectionClass();
+        \$this->{$collName}Partial = true;
 ";
             if ($relatedObjectClassName) {
                 $script .= "
@@ -4239,6 +4258,51 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
 ";
         }
 
+    }
+
+    /**
+     * Adds the method that check if the referrer fkey collection is initialized.
+     * @param string &$script The script will be modified in this method.
+     * @param CrossForeignKeys $crossFKs
+     */
+    protected function addCrossFKIsLoaded(&$script, CrossForeignKeys $crossFKs)
+    {
+        $inits = [];
+
+        if (1 < count($crossFKs->getCrossForeignKeys()) || $crossFKs->getUnclassifiedPrimaryKeys()) {
+            $inits[] = [
+                'relCol'   => $this->getCrossFKsPhpNameAffix($crossFKs, true),
+                'collName' => 'combination' . ucfirst($this->getCrossFKsVarName($crossFKs)),
+            ];
+        }
+
+        foreach ($crossFKs->getCrossForeignKeys() as $crossFK) {
+            $relCol = $this->getFKPhpNameAffix($crossFK, true);
+            $collName = $this->getCrossFKVarName($crossFK);
+            $collectionClass = 'ObjectCollection';
+
+            $inits[] = [
+                'relCol'   => $relCol,
+                'collName' => $collName,
+            ];
+        }
+
+        foreach ($inits as $init) {
+            $relCol = $init['relCol'];
+            $collName = $init['collName'];
+
+            $script .= "
+    /**
+     * Checks if the $collName collection is loaded.
+     *
+     * @return bool
+     */
+    public function is{$relCol}Loaded()
+    {
+        return null !== \$this->$collName;
+    }
+";
+        }
     }
 
     /**
@@ -4283,7 +4347,8 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
      */
     public function get{$relatedName}(\$criteria = null, ConnectionInterface \$con = null)
     {
-        if (null === \$this->$collVarName || null !== \$criteria) {
+        \$partial = \$this->{$collVarName}Partial && !\$this->isNew();
+        if (null === \$this->$collVarName || null !== \$criteria || \$partial) {
             if (\$this->isNew()) {
                 // return empty collection
                 if (null === \$this->$collVarName) {
@@ -4292,19 +4357,60 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
             } else {
 
                 \$query = $relatedQueryClassName::create(null, \$criteria)
-                    ->filterBy{$selfRelationName}(\$this);
-                \$$collVarName = \$query->find(\$con);
+                    ->filterBy{$selfRelationName}(\$this)";
+                foreach ($crossFKs->getCrossForeignKeys() as $fk) {
+                    $varName = $this->getFKPhpNameAffix($fk, $plural = false);
+                    $script .= "
+                    ->join{$varName}()";
+                }
+
+            $script .= "
+                ;
+
+                \$items = \$query->find(\$con);
+                \$$collVarName = new ObjectCombinationCollection();
+                foreach (\$items as \$item) {
+                    \$combination = [];
+";
+
+            foreach ($crossFKs->getCrossForeignKeys() as $fk) {
+                $varName = $this->getFKPhpNameAffix($fk, $plural = false);
+                $script .= "
+                    \$combination[] = \$item->get{$varName}();";
+            }
+
+            foreach ($crossFKs->getUnclassifiedPrimaryKeys() as $pk) {
+                $varName = $pk->getPhpName();
+                $script .= "
+                    \$combination[] = \$item->get{$varName}();";
+            }
+
+            $script .= "
+                    \${$collVarName}[] = \$combination;
+                }
+
                 if (null !== \$criteria) {
                     return \$$collVarName;
                 }
 
+                if (\$partial && \$this->{$collVarName}) {
+                    //make sure that already added objects gets added to the list of the database.
+                    foreach (\$this->{$collVarName} as \$obj) {
+                        if (!call_user_func_array([\${$collVarName}, 'contains'], \$obj)) {
+                            \${$collVarName}[] = \$obj;
+                        }
+                    }
+                }
+
                 \$this->$collVarName = \$$collVarName;
+                \$this->{$collVarName}Partial = false;
             }
         }
 
         return \$this->$collVarName;
     }
 ";
+            return;
         }
 
         foreach ($crossFKs->getCrossForeignKeys() as $crossFK) {
@@ -4332,7 +4438,8 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
      */
     public function get{$relatedName}(\$criteria = null, ConnectionInterface \$con = null)
     {
-        if (null === \$this->$collName || null !== \$criteria) {
+        \$partial = \$this->{$collName}Partial && !\$this->isNew();
+        if (null === \$this->$collName || null !== \$criteria || \$partial) {
             if (\$this->isNew()) {
                 // return empty collection
                 if (null === \$this->$collName) {
@@ -4346,7 +4453,18 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
                 if (null !== \$criteria) {
                     return \$$collName;
                 }
+
+                if (\$partial && \$this->{$collName}) {
+                    //make sure that already added objects gets added to the list of the database.
+                    foreach (\$this->{$collName} as \$obj) {
+                        if (!\${$collName}->contains(\$obj)) {
+                            \${$collName}[] = \$obj;
+                        }
+                    }
+                }
+
                 \$this->$collName = \$$collName;
+                \$this->{$collName}Partial = false;
             }
         }
 
@@ -4354,35 +4472,6 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
     }
 ";
         }
-    }
-
-    protected function buildCheckSum(&$script, CrossForeignKeys $crossFKs, $withUnclassifiedPks = true, $withFks = true, $excludeFK = null)
-    {
-        $script .= '$checkSum = \'\'';
-
-        if ($withUnclassifiedPks) {
-            foreach ($crossFKs->getUnclassifiedPrimaryKeys() as $primaryKey) {
-                $crossObjectName  = '$' . $primaryKey->getStudlyPhpName();
-                $script .= "
-                        . ':' . rawurlencode(json_encode($crossObjectName))";
-            }
-        }
-
-        if ($withFks) {
-            foreach ($crossFKs->getCrossForeignKeys() as $otherFk) {
-                if ($otherFk === $excludeFK) continue;
-                $crossObjectName  = '$' . $otherFk->getForeignTable()->getStudlyPhpName();
-                $script .= "
-                        . ':'";
-                foreach ($otherFk->getForeignTable()->getPrimaryKey() as $pk) {
-                    $getter = 'get' . $pk->getPhpName();
-                    $script .= "
-                        . ',' . rawurlencode(json_encode($crossObjectName->$getter()))";
-                }
-            }
-        }
-
-        $script .= ";\n";
     }
 
     /**
@@ -4393,16 +4482,25 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
     {
         $scheduledForDeletionVarName = $this->getCrossScheduledForDeletionVarName($crossFKs);
 
-        foreach ($crossFKs->getCrossForeignKeys() as $crossFK) {
-            $relatedNamePlural       = $this->getFKPhpNameAffix($crossFK, true);
-            $relatedName             = $this->getFKPhpNameAffix($crossFK, false);
-            $relatedObjectClassName  = $this->getNewStubObjectBuilder($crossFK->getForeignTable())->getUnqualifiedClassName();
-            $crossRefTableName       = $crossFK->getTableName();
-            $collName                = $this->getCrossFKVarName($crossFK);
-            $inputCollection         = lcfirst($relatedNamePlural);
-            $inputCollectionEntry    = lcfirst($this->getFKPhpNameAffix($crossFK, false));
+        $multi = 1 < count($crossFKs->getCrossForeignKeys()) || !!$crossFKs->getUnclassifiedPrimaryKeys();
 
-            $script .= "
+        $relatedNamePlural = $this->getCrossFKsPhpNameAffix($crossFKs, true);
+        $relatedName       = $this->getCrossFKsPhpNameAffix($crossFKs, false);
+        $inputCollection   = lcfirst($relatedNamePlural);
+        $foreachItem       = lcfirst($relatedName);
+        $crossRefTableName = $crossFKs->getMiddleTable()->getName();
+
+        if ($multi) {
+            list($relatedObjectClassName) = $this->getCrossFKInformation($crossFKs);
+            $collName = 'combination' . ucfirst($this->getCrossFKsVarName($crossFKs));
+        } else {
+            $crossFK = $crossFKs->getCrossForeignKeys()[0];
+            $relatedObjectClassName = $this->getNewStubObjectBuilder($crossFK->getForeignTable())->getUnqualifiedClassName();
+            $collName = $this->getCrossFKVarName($crossFK);
+        }
+
+
+        $script .= "
     /**
      * Sets a collection of $relatedObjectClassName objects related by a many-to-many relationship
      * to the current object by way of the $crossRefTableName cross-reference table.
@@ -4418,20 +4516,40 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
         \$this->clear{$relatedNamePlural}();
         \$current{$relatedNamePlural} = \$this->get{$relatedNamePlural}();
 
-        \$this->{$scheduledForDeletionVarName} = \$current{$relatedNamePlural}->diff(\${$inputCollection});
+        \${$scheduledForDeletionVarName} = \$current{$relatedNamePlural}->diff(\${$inputCollection});
 
-        foreach (\${$inputCollection} as \${$inputCollectionEntry}) {
-            if (!\$current{$relatedNamePlural}->contains(\${$inputCollectionEntry})) {
-                \$this->doAdd{$relatedName}(\${$inputCollectionEntry});
-            }
+        foreach (\${$scheduledForDeletionVarName} as \$toDelete) {";
+        if ($multi) {
+            $script .= "
+            call_user_func_array([\$this, 'remove{$relatedName}'], \$toDelete);";
+        } else {
+            $script .= "
+            \$this->remove{$relatedName}(\$toDelete);";
+        }
+        $script .= "
         }
 
+        foreach (\${$inputCollection} as \${$foreachItem}) {";
+        if ($multi) {
+            $script .= "
+            if (!call_user_func_array([\$current{$relatedNamePlural}, 'contains'], \${$foreachItem})) {
+                call_user_func_array([\$this, 'doAdd{$relatedName}'], \${$foreachItem});
+            }";
+        } else {
+            $script .= "
+            if (!\$current{$relatedNamePlural}->contains(\${$foreachItem})) {
+                \$this->doAdd{$relatedName}(\${$foreachItem});
+            }";
+        }
+        $script .= "
+        }
+
+        \$this->{$collName}Partial = false;
         \$this->$collName = \${$inputCollection};
 
         return \$this;
     }
 ";
-        }
     }
 
     /**
@@ -4586,15 +4704,14 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
      */
     public function add{$relatedObjectClassName}($signature)
     {
-
         if (\$this->" . $collName . " === null) {
             \$this->init" . $relNamePlural . "();
         }
 
         if (!\$this->" . $collName . "->contains(" . $normalizedShortSignature . ")) {
             // only add it if the **same** object is not already associated
-            \$this->doAdd{$relName}($normalizedShortSignature);
             \$this->" . $collName . "->push(" . $normalizedShortSignature . ");
+            \$this->doAdd{$relName}($normalizedShortSignature);
         }
 
         return \$this;
@@ -4620,6 +4737,7 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
     protected function addCrossFKDoAdd(&$script, CrossForeignKeys $crossFKs)
     {
 
+        $selfRelationName      = $this->getFKPhpNameAffix($crossFKs->getIncomingForeignKey(), $plural = false);
         $selfRelationNamePlural      = $this->getFKPhpNameAffix($crossFKs->getIncomingForeignKey(), $plural = true);
         $relatedObjectClassName      = $this->getCrossFKsPhpNameAffix($crossFKs, $plural = false);
         $joinedTableObjectBuilder    = $this->getNewObjectBuilder($crossFKs->getIncomingForeignKey()->getTable());
@@ -4660,39 +4778,31 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
         {$foreignObjectName}->set{$relatedObjectClassName}(\${$lowerRelatedObjectClassName});";
         }
 
+        $refFK = $crossFKs->getIncomingForeignKey();
         $script .= "
+
+        {$foreignObjectName}->set" . $this->getFKPhpNameAffix($refFK, $plural = false) . "(\$this);
+
         \$this->add{$refKObjectClassName}({$foreignObjectName});\n";
 
         if (1 < count($crossFKs->getCrossForeignKeys()) || $crossFKs->getUnclassifiedPrimaryKeys()) {
             foreach ($crossFKs->getCrossForeignKeys() as $crossFK) {
-
-                $relNamePlural = $this->getFKPhpNameAffix($crossFK, $plural = true);
-                $relName = $this->getFKPhpNameAffix($crossFK, $plural = false);
-                $collName = $this->getCrossFKVarName($crossFK);
-
                 $relatedObjectClassName = $this->getFKPhpNameAffix($crossFK, $plural = false);
                 $lowerRelatedObjectClassName = lcfirst($relatedObjectClassName);
-                $getterSignature = $this->getCrossFKGetterSignature($crossFKs, '$' . $lowerRelatedObjectClassName);
 
-
-                $script .= "
-
-        if (\$this->" . $collName . " === null) {
-            \$this->init" . $relNamePlural . "();
-        }
-
-        if (!\$this->" . $collName . "->contains(\${$lowerRelatedObjectClassName})) {
-            \$this->" . $collName . "->push(\${$lowerRelatedObjectClassName});
-        }
-";
+                $getterName = $this->getCrossRefFKGetterName($crossFKs, $crossFK);
+                $getterRemoveObjectName = $this->getCrossRefFKRemoveObjectNames($crossFKs, $crossFK);
 
                 $script .= "
         // set the back reference to this object directly as using provided method either results
         // in endless loop or in multiple relations
-        if (!\${$lowerRelatedObjectClassName}->get{$selfRelationNamePlural}($getterSignature)->contains(\$this)) {
-            \$foreignCollection   = \${$lowerRelatedObjectClassName}->get{$selfRelationNamePlural}($getterSignature);
-            \$foreignCollection[] = \$this;
+        if (\${$lowerRelatedObjectClassName}->is{$getterName}Loaded()) {
+            \${$lowerRelatedObjectClassName}->init{$getterName}();
+            \${$lowerRelatedObjectClassName}->get{$getterName}()->push($getterRemoveObjectName);
+        } else if (!\${$lowerRelatedObjectClassName}->get{$getterName}()->contains($getterRemoveObjectName)) {
+            \${$lowerRelatedObjectClassName}->get{$getterName}()->push($getterRemoveObjectName);
         }\n";
+
             }
 
         } else {
@@ -4702,9 +4812,11 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
             $script .= "
         // set the back reference to this object directly as using provided method either results
         // in endless loop or in multiple relations
-        if (!\${$lowerRelatedObjectClassName}->get{$selfRelationNamePlural}($getterSignature)->contains(\$this)) {
-            \$foreignCollection   = \${$lowerRelatedObjectClassName}->get{$selfRelationNamePlural}($getterSignature);
-            \$foreignCollection[] = \$this;
+        if (!\${$lowerRelatedObjectClassName}->is{$selfRelationNamePlural}Loaded()) {
+            \${$lowerRelatedObjectClassName}->init{$selfRelationNamePlural}();
+            \${$lowerRelatedObjectClassName}->get{$selfRelationNamePlural}($getterSignature)->push(\$this);
+        } else if (!\${$lowerRelatedObjectClassName}->get{$selfRelationNamePlural}($getterSignature)->contains(\$this)) {
+            \${$lowerRelatedObjectClassName}->get{$selfRelationNamePlural}($getterSignature)->push(\$this);
         }\n";
 
         }
@@ -4713,6 +4825,48 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
     }
 ";
     }
+
+    protected function getCrossRefFKGetterName(CrossForeignKeys $crossFKs, ForeignKey $excludeFK) {
+        $names = [];
+
+        $fks = $crossFKs->getCrossForeignKeys();
+
+        foreach ($crossFKs->getMiddleTable()->getForeignKeys() as $fk) {
+            if ($fk !== $excludeFK && ($fk === $crossFKs->getIncomingForeignKey() || in_array($fk, $fks))) {
+                $names[] = $this->getFKPhpNameAffix($fk, false);
+            }
+        }
+
+        foreach ($crossFKs->getUnclassifiedPrimaryKeys() as $pk) {
+            $names[] = $pk->getPhpName();
+        }
+
+        $name = implode($names);
+        return $this->getPluralizer()->getPluralForm($name);
+    }
+
+    protected function getCrossRefFKRemoveObjectNames(CrossForeignKeys $crossFKs, ForeignKey $excludeFK) {
+        $names = [];
+
+        $fks = $crossFKs->getCrossForeignKeys();
+
+        foreach ($crossFKs->getMiddleTable()->getForeignKeys() as $fk) {
+            if ($fk !== $excludeFK && ($fk === $crossFKs->getIncomingForeignKey() || in_array($fk, $fks))) {
+                if ($fk === $crossFKs->getIncomingForeignKey()) {
+                    $names[] = '$this';
+                } else {
+                    $names[] = '$' . lcfirst($this->getFKPhpNameAffix($fk, false));
+                }
+            }
+        }
+
+        foreach ($crossFKs->getUnclassifiedPrimaryKeys() as $pk) {
+            $names[] = '$' . lcfirst($pk->getPhpName());
+        }
+
+        return implode(', ', $names);
+    }
+
 
     /**
      * Adds the method that remove an object from the referrer fkey collection.
@@ -4730,20 +4884,16 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
 
         $tblFK    = $crossFKs->getIncomingForeignKey()->getTable();
 
-        //$joinedTableObjectBuilder = $this->getNewObjectBuilder($crossFKs->getForeignKey()->getTable());
-        //$className                = $joinedTableObjectBuilder->getObjectClassname();
         $M2MScheduledForDeletion  = $this->getCrossScheduledForDeletionVarName($crossFKs);
-        //$crossObjectName          = '$' . $crossFKs->getTable()->getStudlyPhpName();
-
-        //$crossObjectClassName     = $this->getNewObjectBuilder($crossFKs->getTable())->getObjectClassname();
         $relatedObjectClassName   = $this->getCrossFKsPhpNameAffix($crossFKs, $plural = false);
-
-
-//       $this->extractCrossInformation($crossFKs, $crossFK, $signature, $shortSignature, $normalizedShortSignature, $phpDoc);
-//      list($names, $phpDoc, $signature, $shortSignature) = $this->getCrossFKInformation($crossFKs);
 
         list($signature, $shortSignature, $normalizedShortSignature, $phpDoc) = $this->getCrossFKAddMethodInformation($crossFKs);
         $names = str_replace('$', '', $normalizedShortSignature);
+
+        $joinedTableObjectBuilder    = $this->getNewObjectBuilder($crossFKs->getIncomingForeignKey()->getTable());
+        $className                   = $joinedTableObjectBuilder->getObjectClassname();
+        $refKObjectClassName         = $this->getRefFKPhpNameAffix($crossFKs->getIncomingForeignKey(), $plural = false);
+        $foreignObjectName           = '$' . $tblFK->getStudlyPhpName();
 
         $script .= "
     /**
@@ -4755,30 +4905,84 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
     public function remove{$relatedObjectClassName}($signature)
     {
         if (\$this->get{$relCol}()->contains({$shortSignature})) {
-            \$this->{$collName}->remove(\$this->{$collName}->search({$shortSignature}));
+            {$foreignObjectName} = new {$className}();
+";
+        if (1 < count($crossFKs->getCrossForeignKeys()) || $crossFKs->getUnclassifiedPrimaryKeys()) {
+            foreach ($crossFKs->getCrossForeignKeys() as $crossFK) {
+                $relatedObjectClassName = $this->getFKPhpNameAffix($crossFK, $plural = false);
+                $lowerRelatedObjectClassName = lcfirst($relatedObjectClassName);
 
+                foreach ($crossFK->getColumnObjectsMapping() as $map) {
+                    $local = $map['local'];
+                    $foreign = $map['foreign'];
+                    $script .= "
+            {$foreignObjectName}->set{$local->getPhpName()}(\${$lowerRelatedObjectClassName}->get{$foreign->getPhpName()}());";
+                }
+
+                $relatedObjectClassName      = $this->getFKPhpNameAffix($crossFK, $plural = false);
+                $lowerRelatedObjectClassName = lcfirst($relatedObjectClassName);
+
+                $getterName = $this->getCrossRefFKGetterName($crossFKs, $crossFK);
+                $getterRemoveObjectName = $this->getCrossRefFKRemoveObjectNames($crossFKs, $crossFK);
+
+                $script .= "
+            if (\${$lowerRelatedObjectClassName}->is{$getterName}Loaded()) {
+                //remove the back reference if available
+                \${$lowerRelatedObjectClassName}->get$getterName()->removeObject($getterRemoveObjectName);
+            }\n";
+
+            }
+
+            foreach ($crossFKs->getUnclassifiedPrimaryKeys() as $primaryKey) {
+                $paramName = lcfirst($primaryKey->getPhpName());
+                $script .= "
+            {$foreignObjectName}->set{$primaryKey->getPhpName()}(\$$paramName);
+";
+            }
+        } else {
+            $crossFK = $crossFKs->getCrossForeignKeys()[0];
+            $relatedObjectClassName      = $this->getFKPhpNameAffix($crossFK, $plural = false);
+            $lowerRelatedObjectClassName = lcfirst($relatedObjectClassName);
+
+            foreach ($crossFK->getColumnObjectsMapping() as $map) {
+                $local = $map['local'];
+                $foreign = $map['foreign'];
+                $script .= "
+            {$foreignObjectName}->set{$local->getPhpName()}(\${$lowerRelatedObjectClassName}->get{$foreign->getPhpName()}());";
+            }
+
+            $refFKName = $this->getFKPhpNameAffix($crossFKs->getIncomingForeignKey(), $plural = true);
+            $relatedObjectClassName      = $this->getFKPhpNameAffix($crossFK, $plural = false);
+            $lowerRelatedObjectClassName = lcfirst($relatedObjectClassName);
+            $script .= "
+            if (\${$lowerRelatedObjectClassName}->is{$refFKName}Loaded()) {
+                //remove the back reference if available
+                \${$lowerRelatedObjectClassName}->get{$refFKName}()->removeObject(\$this);
+            }";
+        }
+
+            foreach ($crossFKs->getIncomingForeignKey()->getColumnObjectsMapping() as $map) {
+                $local = $map['local'];
+                $foreign = $map['foreign'];
+                $script .= "
+            {$foreignObjectName}->set{$local->getPhpName()}(\$this->get{$foreign->getPhpName()}());";
+            }
+
+             $script .= "
+            \$this->remove{$refKObjectClassName}({$foreignObjectName});
+
+            \$this->{$collName}->remove(\$this->{$collName}->search({$shortSignature}));
+            ";
+        $script .= "
             if (null === \$this->{$M2MScheduledForDeletion}) {
                 \$this->{$M2MScheduledForDeletion} = clone \$this->{$collName};
                 \$this->{$M2MScheduledForDeletion}->clear();
             }
 
             \$this->{$M2MScheduledForDeletion}->push({$shortSignature});
+            //ar_dump(\$this->{$M2MScheduledForDeletion});
         }
 ";
-
-        if (1 < count($crossFKs->getCrossForeignKeys()) || $crossFKs->getUnclassifiedPrimaryKeys()) {
-            foreach ($crossFKs->getCrossForeignKeys() as $crossFK) {
-                $relCol   = $this->getFKPhpNameAffix($crossFK, $plural = true);
-                $collName = 'coll' . $relCol;
-                $crossObjectName = '$' . lcfirst($this->getFKPhpNameAffix($crossFK)); //$crossFK->getForeignTable()->getStudlyPhpName();
-
-                $script .= "
-        if (false !== (\$idx = \$this->get{$relCol}()->search({$crossObjectName}))) {
-            \$this->{$collName}->remove(\$idx);
-        }
-";
-            }
-        }
 
         $script .= "
         return \$this;
@@ -4911,8 +5115,8 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
 
                 $collName = $this->getRefFKCollVarName($refFK);
                 $script .= "
-                if (\$this->$collName !== null) {
-            foreach (\$this->$collName as \$referrerFK) {
+            if (\$this->$collName !== null) {
+                foreach (\$this->$collName as \$referrerFK) {
                     if (!\$referrerFK->isDeleted() && (\$referrerFK->isNew() || \$referrerFK->isModified())) {
                         \$affectedRows += \$referrerFK->save(\$con);
                     }
@@ -5678,6 +5882,9 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
         }
         foreach ($this->getTable()->getCrossFks() as $crossFKs) {
             $varName = $this->getCrossFKsVarName($crossFKs);
+            if (1 < count($crossFKs->getCrossForeignKeys()) || $crossFKs->getUnclassifiedPrimaryKeys()) {
+                $varName = 'combination' . ucfirst($varName);
+            }
             $script .= "
             if (\$this->$varName) {
                 foreach (\$this->$varName as \$o) {
