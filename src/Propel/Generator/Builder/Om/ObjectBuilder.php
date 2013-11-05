@@ -4561,16 +4561,24 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
         $refFK = $crossFKs->getIncomingForeignKey();
         $selfRelationName = $this->getFKPhpNameAffix($refFK, $plural = false);
 
-        foreach ($crossFKs->getCrossForeignKeys() as $crossFK) {
+        $relatedQueryClassName = $this->getClassNameFromBuilder($this->getNewStubQueryBuilder($crossFKs->getMiddleTable()));
 
-            $relatedName = $this->getFKPhpNameAffix($crossFK, true);
-            $relatedObjectClassName = $this->getClassNameFromBuilder($this->getNewStubObjectBuilder($crossFK->getForeignTable()));
-            $relatedQueryClassName = $this->getClassNameFromBuilder($this->getNewStubQueryBuilder($crossFK->getForeignTable()));
+        $multi = 1 < count($crossFKs->getCrossForeignKeys()) || !!$crossFKs->getUnclassifiedPrimaryKeys();
 
-            $crossRefTableName = $crossFK->getTableName();
+        $relatedName       = $this->getCrossFKsPhpNameAffix($crossFKs, true);
+        $crossRefTableName = $crossFKs->getMiddleTable()->getName();
+
+        if ($multi) {
+            list($relatedObjectClassName) = $this->getCrossFKInformation($crossFKs);
+            $collName = 'combination' . ucfirst($this->getCrossFKsVarName($crossFKs));
+        } else {
+            $crossFK = $crossFKs->getCrossForeignKeys()[0];
+            $relatedObjectClassName = $this->getNewStubObjectBuilder($crossFK->getForeignTable())->getUnqualifiedClassName();
             $collName = $this->getCrossFKVarName($crossFK);
+        }
 
-            $script .= "
+
+        $script .= "
     /**
      * Gets the number of $relatedObjectClassName objects related by a many-to-many relationship
      * to the current object by way of the $crossRefTableName cross-reference table.
@@ -4583,10 +4591,16 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
      */
     public function count{$relatedName}(\$criteria = null, \$distinct = false, ConnectionInterface \$con = null)
     {
-        if (null === \$this->$collName || null !== \$criteria) {
+        \$partial = \$this->{$collName}Partial && !\$this->isNew();
+        if (null === \$this->$collName || null !== \$criteria || \$partial) {
             if (\$this->isNew() && null === \$this->$collName) {
                 return 0;
             } else {
+
+                if (\$partial && !\$criteria) {
+                    return count(\$this->get$relatedName());
+                }
+
                 \$query = $relatedQueryClassName::create(null, \$criteria);
                 if (\$distinct) {
                     \$query->distinct();
@@ -4601,7 +4615,6 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
         }
     }
 ";
-        }
     }
 
     /**
