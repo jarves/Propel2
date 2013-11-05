@@ -51,14 +51,53 @@ class ObjectCombinationCollection extends ObjectCollection
         return $ret;
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public function push($value)
     {
         parent::push(func_get_args());
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public function search($element)
     {
-        return parent::search(func_get_args());
+        $hashes = [];
+        $isActiveRecord = [];
+        foreach (func_get_args() as $pos => $obj) {
+            if ($obj instanceof ActiveRecordInterface) {
+                $hashes[$pos] = $obj->hashCode();
+                $isActiveRecord[$pos] = true;
+            } else {
+                $hashes[$pos] = $obj;
+                $isActiveRecord[$pos] = false;
+            }
+        }
+        foreach ($this as $pos => $combination) {
+            $found = true;
+            foreach ($combination as $idx => $obj) {
+                if ($isActiveRecord[$idx] ? $obj->hashCode() !== $hashes[$idx] : $obj !== $hashes[$idx]) {
+                    $found = false;
+                    break;
+                }
+            }
+            if ($found) {
+                return $pos;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function removeObject($element)
+    {
+        if (false !== ($pos = call_user_func_array([$this, 'search'], func_get_args()))) {
+            $this->remove($pos);
+        }
     }
 
     /**
@@ -66,7 +105,7 @@ class ObjectCombinationCollection extends ObjectCollection
      */
     public function contains($element)
     {
-        return parent::contains(func_get_args());
+        return false !== call_user_func_array([$this, 'search'], func_get_args());
     }
 
 }
