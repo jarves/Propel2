@@ -18,9 +18,6 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
 {
     protected $databaseName = 'migration';
 
-    /**
-     * @group test1
-     */
     public function testSimpleRelation()
     {
         $schema = '
