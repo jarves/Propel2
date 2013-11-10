@@ -4731,7 +4731,7 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
             \$this->init" . $relNamePlural . "();
         }
 
-        if (!\$this->" . $collName . "->contains(" . $normalizedShortSignature . ")) {
+        if (!\$this->get" . $relNamePlural . "()->contains(" . $normalizedShortSignature . ")) {
             // only add it if the **same** object is not already associated
             \$this->" . $collName . "->push(" . $normalizedShortSignature . ");
             \$this->doAdd{$relName}($normalizedShortSignature);

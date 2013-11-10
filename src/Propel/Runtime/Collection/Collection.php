@@ -613,7 +613,9 @@ class Collection extends \ArrayObject implements \Serializable
     public function __clone()
     {
         foreach ($this as $key => $obj) {
-            $this[$key] = clone $obj;
+            if (is_object($obj)) {
+                $this[$key] = clone $obj;
+            }
         }
     }
 }
