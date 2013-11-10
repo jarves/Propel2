@@ -67,7 +67,7 @@ class ObjectCombinationCollection extends ObjectCollection
         $hashes = [];
         $isActiveRecord = [];
         foreach (func_get_args() as $pos => $obj) {
-            if ($obj instanceof ActiveRecordInterface) {
+            if (is_object($obj) && $obj instanceof ActiveRecordInterface) {
                 $hashes[$pos] = $obj->hashCode();
                 $isActiveRecord[$pos] = true;
             } else {
@@ -78,7 +78,12 @@ class ObjectCombinationCollection extends ObjectCollection
         foreach ($this as $pos => $combination) {
             $found = true;
             foreach ($combination as $idx => $obj) {
-                if ($isActiveRecord[$idx] ? $obj->hashCode() !== $hashes[$idx] : $obj !== $hashes[$idx]) {
+                if (null === $obj) {
+                    if ($obj !== $hashes[$idx]) {
+                        $found = false;
+                        break;
+                    }
+                } else if ($isActiveRecord[$idx] ? $obj->hashCode() !== $hashes[$idx] : $obj !== $hashes[$idx]) {
                     $found = false;
                     break;
                 }

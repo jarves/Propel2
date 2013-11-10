@@ -83,6 +83,24 @@ class PlatformDatabaseBuildTimeBase extends TestCase
     }
 
     /**
+     * Migrates the database.
+     *
+     * @param string $schema xml schema
+     */
+    public function migrate($schema)
+    {
+        $builder = new QuickBuilder();
+        $platform  = $this->getPlatform();
+
+        $builder->setPlatform($platform);
+        $builder->setParser($this->getParser($this->con));
+        $builder->getParser()->setPlatform($platform);
+        $builder->setSchema($schema);
+
+        $builder->updateDB($this->con);
+    }
+
+    /**
      * Detects the differences between current connected database and $pDatabase
      * and updates the schema. This does not DROP tables.
      *

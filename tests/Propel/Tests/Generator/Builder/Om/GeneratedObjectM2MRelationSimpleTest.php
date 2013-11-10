@@ -5,22 +5,20 @@ namespace Propel\Tests\Issues;
 use Propel\Generator\Platform\MysqlPlatform;
 use Propel\Generator\Util\QuickBuilder;
 use Propel\Runtime\Collection\ObjectCollection;
+use Propel\Runtime\Collection\ObjectCombinationCollection;
 use Propel\Tests\Helpers\PlatformDatabaseBuildTimeBase;
 
-/**
- * This test proves the bug described in https://github.com/propelorm/Propel/issues/617.
- * Since the build property `addVendorInfo` is per default not set (= false), the `MysqlSchemaParser` **did**
- * not return the `Engine` of the table. Since we depend on that information in `MysqlPlatform`,
- * we really need that kind of information.
- *
- */
-class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
+class GeneratedObjectM2MRelationSimpleTest extends PlatformDatabaseBuildTimeBase
 {
     protected $databaseName = 'migration';
+    protected $connected = false;
 
-    public function testSimpleRelation()
+    public function setUp()
     {
-        $schema = '
+        parent::setUp();
+
+        if (!class_exists('\Relation1UserFriendQuery')) {
+            $schema = '
     <database name="migration" schema="migration">
         <table name="relation1_user_friend" isCrossRef="true">
             <column name="user_id" type="integer" primaryKey="true"/>
@@ -42,23 +40,26 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
     </database>
         ';
 
-        $this->buildAndMigrate($schema);
+            $this->buildAndMigrate($schema);
+        }
+    }
 
-        /**
-         *
-         *               addFriend | removeFriend | setFriends | getFriends
-         *              +---------------------------------------------------
-         * addFriend    |    1             2             3            4
-         * removeFriend |    5             6             7            8
-         * setFriends   |    9            10            11           12
-         *
-         */
+    /**
+     *
+     *               addFriend | removeFriend | setFriends | getFriends
+     *              +---------------------------------------------------
+     * addFriend    |    1             2             3            4
+     * removeFriend |    5             6             7            8
+     * setFriends   |    9            10            11           12
+     *
+     */
 
-
-        /*
-         * ####################################
-         * 1. addFriend, addFriend
-         */
+    /*
+     * ####################################
+     * 1. addFriend, addFriend
+     */
+    public function test1()
+    {
         \Relation1UserFriendQuery::create()->deleteAll();
         \Relation1UserQuery::create()->deleteAll();
 
@@ -78,11 +79,14 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertEquals(2, \Relation1UserFriendQuery::create()->count(), 'We have two connections.');
         $this->assertEquals(2, \Relation1UserQuery::create()->filterByWho($hans)->count(), 'Hans has two friends.');
 
+    }
 
-        /*
-         * ####################################
-         * 2. addFriend, removeFriend
-         */
+    /*
+     * ####################################
+     * 2. addFriend, removeFriend
+     */
+    public function test2()
+    {
         \Relation1UserFriendQuery::create()->deleteAll();
         \Relation1UserQuery::create()->deleteAll();
 
@@ -115,11 +119,14 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertEquals(1, \Relation1UserQuery::create()->filterByWho($hans)->count(), 'Hans has one friend.');
         $this->assertEquals($friend2, \Relation1UserQuery::create()->filterByWho($hans)->findOne(), 'Hans has Friend 2 as friend');
 
+    }
 
-        /*
-         * ####################################
-         * 3. addFriend, setFriends
-         */
+    /*
+     * ####################################
+     * 3. addFriend, setFriends
+     */
+    public function test3()
+    {
         \Relation1UserFriendQuery::create()->deleteAll();
         \Relation1UserQuery::create()->deleteAll();
 
@@ -145,11 +152,14 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertEquals(2, \Relation1UserFriendQuery::create()->count(), 'We have two connections.');
         $this->assertEquals(2, \Relation1UserQuery::create()->filterByWho($hans)->count(), 'Hans has two friends.');
 
+    }
 
-        /*
-         * ####################################
-         * 4. addFriend, getFriend
-         */
+    /*
+     * ####################################
+     * 4. addFriend, getFriend
+     */
+    public function test4()
+    {
         \Relation1UserFriendQuery::create()->deleteAll();
         \Relation1UserQuery::create()->deleteAll();
 
@@ -165,11 +175,14 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertEquals(1, \Relation1UserQuery::create()->filterByWho($hans)->count(), 'Hans has one friend.');
         $this->assertCount(1, $hans->getFriends());
 
+    }
 
-        /*
-         * ####################################
-         * 5. removeFriend, addFriend
-         */
+    /*
+     * ####################################
+     * 5. removeFriend, addFriend
+     */
+    public function test5()
+    {
         \Relation1UserFriendQuery::create()->deleteAll();
         \Relation1UserQuery::create()->deleteAll();
 
@@ -221,11 +234,14 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertEquals(1, \Relation1UserQuery::create()->filterByWho($newHansObject)->count(), 'Hans has one friend.');
         $this->assertEquals($friend1, \Relation1UserQuery::create()->filterByWho($newHansObject)->findOne(), 'Hans has Friend 2 as friend');
 
+    }
 
-        /*
-         * ####################################
-         * 6. removeFriend, removeFriend
-         */
+    /*
+     * ####################################
+     * 6. removeFriend, removeFriend
+     */
+    public function test6()
+    {
         \Relation1UserFriendQuery::create()->deleteAll();
         \Relation1UserQuery::create()->deleteAll();
 
@@ -244,6 +260,7 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertCount(2, $hans->getFriends());
 
         //db prepared, work now with new objects.
+        \Map\Relation1UserTableMap::clearInstancePool();
         /** @var \Relation1User $newHansObject */
         $newHansObject = \Relation1UserQuery::create()->findOneByName('hans');
         $friend1 = \Relation1UserQuery::create()->findOneByName('Friend 1');
@@ -265,11 +282,14 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertEquals(0, \Relation1UserFriendQuery::create()->count(), 'We have zero connections.');
         $this->assertEquals(0, \Relation1UserQuery::create()->filterByWho($newHansObject)->count(), 'Hans has zero friends.');
 
+    }
 
-        /*
-         * ####################################
-         * 7. removeFriend, setFriends
-         */
+    /*
+     * ####################################
+     * 7. removeFriend, setFriends
+     */
+    public function test7()
+    {
         \Relation1UserFriendQuery::create()->deleteAll();
         \Relation1UserQuery::create()->deleteAll();
 
@@ -287,6 +307,7 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertCount(1, $hans->getFriends());
 
         //db prepared, work now with new objects.
+        \Map\Relation1UserTableMap::clearInstancePool();
         /** @var \Relation1User $newHansObject */
         $newHansObject = \Relation1UserQuery::create()->findOneByName('hans');
         $friend1 = \Relation1UserQuery::create()->findOneByName('Friend 1');
@@ -308,11 +329,14 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertEquals(2, \Relation1UserFriendQuery::create()->count(), 'We have two connections.');
         $this->assertEquals(2, \Relation1UserQuery::create()->filterByWho($newHansObject)->count(), 'Hans has two friends.');
 
+    }
 
-        /*
-         * ####################################
-         * 8. removeFriend, getFriends
-         */
+    /*
+     * ####################################
+     * 8. removeFriend, getFriends
+     */
+    public function test8()
+    {
         \Relation1UserFriendQuery::create()->deleteAll();
         \Relation1UserQuery::create()->deleteAll();
 
@@ -331,6 +355,7 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertCount(2, $hans->getFriends());
 
         //db prepared, work now with new objects.
+        \Map\Relation1UserTableMap::clearInstancePool();
         /** @var \Relation1User $newHansObject */
         $newHansObject = \Relation1UserQuery::create()->findOneByName('hans');
         $friend1 = \Relation1UserQuery::create()->findOneByName('Friend 1');
@@ -351,11 +376,14 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertEquals(1, \Relation1UserQuery::create()->filterByWho($newHansObject)->count(), 'Hans has one friend.');
         $this->assertEquals('Friend 2', \Relation1UserQuery::create()->filterByWho($newHansObject)->findOne()->getName(), 'Hans has Friend 2 as friend');
 
+    }
 
-        /*
-         * ####################################
-         * 9. setFriends, addFriend
-         */
+    /*
+     * ####################################
+     * 9. setFriends, addFriend
+     */
+    public function test9()
+    {
         \Relation1UserFriendQuery::create()->deleteAll();
         \Relation1UserQuery::create()->deleteAll();
 
@@ -380,11 +408,14 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertEquals(3, \Relation1UserFriendQuery::create()->count(), 'We have three connections.');
         $this->assertEquals(3, \Relation1UserQuery::create()->filterByWho($hans)->count(), 'Hans has three friends.');;
 
+    }
 
-        /*
-         * ####################################
-         * 10. setFriends, removeFriend
-         */
+    /*
+     * ####################################
+     * 10. setFriends, removeFriend
+     */
+    public function test10()
+    {
         \Relation1UserFriendQuery::create()->deleteAll();
         \Relation1UserQuery::create()->deleteAll();
 
@@ -408,11 +439,14 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertEquals(1, \Relation1UserFriendQuery::create()->count(), 'We have one connection.');
         $this->assertEquals(1, \Relation1UserQuery::create()->filterByWho($hans)->count(), 'Hans has one friend.');
 
+    }
 
-        /*
-         * ####################################
-         * 11. setFriends, setFriends
-         */
+    /*
+     * ####################################
+     * 11. setFriends, setFriends
+     */
+    public function test11()
+    {
         \Relation1UserFriendQuery::create()->deleteAll();
         \Relation1UserQuery::create()->deleteAll();
 
@@ -444,11 +478,14 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertEquals(2, \Relation1UserQuery::create()->filterByWho($hans)->count(), 'Hans has two friends.');
         $this->assertEquals($friends, \Relation1UserQuery::create()->filterByWho($hans)->find());
 
+    }
 
-        /*
-         * ####################################
-         * 11. setFriends, setFriends
-         */
+    /*
+     * ####################################
+     * 12. setFriends, getFriends
+     */
+    public function test12()
+    {
         \Relation1UserFriendQuery::create()->deleteAll();
         \Relation1UserQuery::create()->deleteAll();
 
@@ -482,11 +519,14 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertEquals(2, \Relation1UserQuery::create()->filterByWho($hans)->count(), 'Hans has two friends.');
         $this->assertEquals('Friend 3', \Relation1UserQuery::create()->filterByWho($hans)->findOne()->getName(), 'Hans\'s first friend is Friend 3.');
 
+    }
 
-        /*
-         * ####################################
-         * Special: Add friend to db and fire addFriend on a new instance.
-         */
+    /*
+     * ####################################
+     * Special: Add friend to db and fire addFriend on a new instance.
+     */
+    public function testAddOnNewInstance()
+    {
         \Relation1UserFriendQuery::create()->deleteAll();
         \Relation1UserQuery::create()->deleteAll();
 
@@ -513,11 +553,14 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertEquals(2, \Relation1UserFriendQuery::create()->count(), 'We have two connections.');
         $this->assertEquals(2, \Relation1UserQuery::create()->filterByWho($newHansObject)->count(), 'Hans has two friends.');
 
+    }
 
-        /*
-         * ####################################
-         * Special: addFriend same friend as the one in the database.
-         */
+    /*
+     * ####################################
+     * Special: addFriend same friend as the one in the database.
+     */
+    public function testAddAfterDB()
+    {
         \Relation1UserFriendQuery::create()->deleteAll();
         \Relation1UserQuery::create()->deleteAll();
 
@@ -540,11 +583,14 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertEquals(1, \Relation1UserFriendQuery::create()->count(), 'We have one connection.');
         $this->assertEquals(1, \Relation1UserQuery::create()->filterByWho($hans)->count(), 'Hans has one friend.');
 
+    }
 
-        /*
-         * ####################################
-         * Special: addFriend, addFriend, removeFriend
-         */
+    /*
+     * ####################################
+     * Special: addFriend, addFriend, removeFriend
+     */
+    public function testAddAddRemove()
+    {
         \Relation1UserFriendQuery::create()->deleteAll();
         \Relation1UserQuery::create()->deleteAll();
 
@@ -568,11 +614,14 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertEquals(1, \Relation1UserQuery::create()->filterByWho($hans)->count(), 'Hans has one friend.');
         $this->assertEquals($friend2, \Relation1UserQuery::create()->filterByWho($hans)->findOne(), 'Hans has Friend 2 as friend');
 
+    }
 
-        /*
-         * ####################################
-         * Special: addFriend, addFriend, removeFriend different order
-         */
+    /*
+     * ####################################
+     * Special: addFriend, addFriend, removeFriend different order
+     */
+    public function testAddAddRemoveDiffOrder()
+    {
         \Relation1UserFriendQuery::create()->deleteAll();
         \Relation1UserQuery::create()->deleteAll();
 
@@ -595,413 +644,4 @@ class GeneratedObjectM2MRelationTest extends PlatformDatabaseBuildTimeBase
         $this->assertEquals($friend1, \Relation1UserQuery::create()->filterByWho($hans)->findOne(), 'Hans has Friend 1 as friend');
 
     }
-
-    public function testRelationThree()
-    {
-        $schema = '
-    <database name="migration" schema="migration">
-        <table name="relation2_user_group" isCrossRef="true">
-            <column name="user_id" type="integer" primaryKey="true"/>
-            <column name="group_id" type="integer" primaryKey="true"/>
-            <column name="position_id" type="integer" primaryKey="true"/>
-
-            <foreign-key foreignTable="relation2_user" phpName="User">
-                <reference local="user_id" foreign="id"/>
-            </foreign-key>
-
-            <foreign-key foreignTable="relation2_group" phpName="Group">
-                <reference local="group_id" foreign="id"/>
-            </foreign-key>
-
-            <foreign-key foreignTable="relation2_position" phpName="Position">
-                <reference local="position_id" foreign="id"/>
-            </foreign-key>
-        </table>
-
-        <table name="relation2_user">
-            <column name="id" type="integer" primaryKey="true" autoIncrement="true"/>
-            <column name="name" />
-        </table>
-
-        <table name="relation2_group">
-            <column name="id" type="integer" primaryKey="true" autoIncrement="true"/>
-            <column name="name" />
-        </table>
-
-        <table name="relation2_position">
-            <column name="id" type="integer" primaryKey="true" autoIncrement="true"/>
-            <column name="name" />
-        </table>
-    </database>
-        ';
-
-        $this->buildAndMigrate($schema);
-
-        /**
-         *
-         *           add     |    remove     |    set     |    get
-         *        +---------------------------------------------------
-         * add    |    1             2             3            4
-         * remove |    5             6             7            8
-         * set    |    9            10            11           12
-         *
-         */
-
-        /*
-         * ####################################
-         * 1. add, add
-         */
-        \Relation2UserQuery::create()->deleteAll();
-        \Relation2GroupQuery::create()->deleteAll();
-        \Relation2UserGroupQuery::create()->deleteAll();
-        \Relation2PositionQuery::create()->deleteAll();
-
-        $hans = new \Relation2User();
-        $hans->setName('hans');
-
-        $admins = new \Relation2Group();
-        $admins->setName('Admins');
-
-        $position = new \Relation2Position();
-        $position->setName('Trainee');
-
-        $hans->addGroup($admins, $position);
-        $this->assertCount(1, $hans->getGroupPositions());
-        $hans->save();
-
-        $this->assertEquals(1, \Relation2UserGroupQuery::create()->count(), 'We have one connection.');
-        $this->assertEquals(1, \Relation2UserQuery::create()->count(), 'We have one user.');
-        $this->assertEquals(1, \Relation2GroupQuery::create()->count(), 'We have one group.');
-        $this->assertEquals(1, \Relation2PositionQuery::create()->count(), 'We have one position.');
-
-        $positionLead = new \Relation2Position();
-        $positionLead->setName('Lead');
-        $hans->addGroup($admins, $positionLead);
-        $this->assertCount(2, $hans->getGroupPositions());
-        $hans->save();
-
-        $this->assertEquals(2, \Relation2UserGroupQuery::create()->count(), 'We have two connections.');
-        $this->assertEquals(1, \Relation2UserQuery::create()->count(), 'We have one user.');
-        $this->assertEquals(1, \Relation2GroupQuery::create()->count(), 'We have one group.');
-        $this->assertEquals(2, \Relation2PositionQuery::create()->count(), 'We have two positions.');
-
-        /*
-         * ####################################
-         * 2. add, remove
-         */
-        \Relation2UserQuery::create()->deleteAll();
-        \Relation2GroupQuery::create()->deleteAll();
-        \Relation2UserGroupQuery::create()->deleteAll();
-        \Relation2PositionQuery::create()->deleteAll();
-
-        $hans = new \Relation2User();
-        $hans->setName('hans');
-
-        $admins = new \Relation2Group();
-        $admins->setName('Admins');
-
-        $position = new \Relation2Position();
-        $position->setName('Trainee');
-
-        $hans->addGroup($admins, $position);
-        $this->assertCount(1, $hans->getGroupPositions());
-        $hans->save();
-
-        $this->assertEquals(1, \Relation2UserGroupQuery::create()->count(), 'We have one connection.');
-        $this->assertEquals(1, \Relation2UserQuery::create()->count(), 'We have one user.');
-        $this->assertEquals(1, \Relation2GroupQuery::create()->count(), 'We have one group.');
-        $this->assertEquals(1, \Relation2PositionQuery::create()->count(), 'We have one position.');
-
-        $hans->removeGroupPosition($admins, $position);
-        $this->assertCount(0, $hans->getGroupPositions());
-        $hans->save();
-
-        $this->assertEquals(0, \Relation2UserGroupQuery::create()->count(), 'We have one connections.');
-        $this->assertEquals(1, \Relation2UserQuery::create()->count(), 'We have one user.');
-        $this->assertEquals(1, \Relation2GroupQuery::create()->count(), 'We have one group.');
-        $this->assertEquals(1, \Relation2PositionQuery::create()->count(), 'We have one position.');
-
-    }
-
-
-    public function testRelationThree2()
-    {
-        $schema = '
-    <database name="migration" schema="migration">
-        <table name="relation3_user_group" isCrossRef="true">
-            <column name="user_id" type="integer" primaryKey="true"/>
-            <column name="group_id" type="integer" primaryKey="true"/>
-            <column name="group_id2" type="integer" primaryKey="true"/>
-            <column name="relation_id" type="integer" primaryKey="true"/>
-
-            <foreign-key foreignTable="relation3_user" phpName="User">
-                <reference local="user_id" foreign="id"/>
-            </foreign-key>
-
-            <foreign-key foreignTable="relation3_group" phpName="Group">
-                <reference local="group_id" foreign="id"/>
-                <reference local="group_id2" foreign="id2"/>
-            </foreign-key>
-
-            <foreign-key foreignTable="relation3_relation" phpName="Relation">
-                <reference local="relation_id" foreign="id"/>
-            </foreign-key>
-        </table>
-
-        <table name="relation3_user">
-            <column name="id" type="integer" primaryKey="true" autoIncrement="true"/>
-            <column name="name" />
-        </table>
-
-        <table name="relation3_group">
-            <column name="id" type="integer" primaryKey="true" autoIncrement="true"/>
-            <column name="id2" type="integer" primaryKey="true"/>
-            <column name="name" />
-        </table>
-
-        <table name="relation3_relation">
-            <column name="id" type="integer" primaryKey="true" autoIncrement="true"/>
-            <column name="name" />
-        </table>
-    </database>
-        ';
-
-        $this->buildAndMigrate($schema);
-
-        \Relation3UserGroupQuery::create()->deleteAll();
-        \Relation3UserQuery::create()->deleteAll();
-        \Relation3GroupQuery::create()->deleteAll();
-        \Relation3RelationQuery::create()->deleteAll();
-
-        $hans = new \Relation3User();
-        $hans->setName('hans');
-
-        $admins = new \Relation3Group();
-        $admins->setName('Admins');
-        $admins->setId2(1);
-
-        $relation = new \Relation3Relation();
-        $relation->setName('Leader');
-
-        $this->assertCount(0, $hans->getGroupRelations(), 'no groups');
-        $hans->addGroup($admins, $relation);
-        $this->assertCount(1, $hans->getGroupRelations(), 'one groups');
-
-        $hans->save();
-
-        $this->assertEquals(1, \Relation3UserQuery::create()->count(), 'We have one user.');
-        $this->assertEquals(1, \Relation3UserGroupQuery::create()->count(), 'We have one connection.');
-        $this->assertEquals(1, \Relation3UserQuery::create()->filterByGroup($admins)->count(), 'Hans has one group.');
-
-        $hans->removeGroupRelation($admins, $relation);
-        $this->assertCount(0, $hans->getGroupRelations(), 'no groups');
-
-        $hans->save();
-
-        $this->assertEquals(1, \Relation3UserQuery::create()->count(), 'We have one user.');
-        $this->assertEquals(0, \Relation3UserGroupQuery::create()->count(), 'We have zero connection.');
-        $this->assertEquals(0, \Relation3UserQuery::create()->filterByGroup($admins)->count(), 'Hans has zero groups.');
-
-    }
-
-    public function testRelationThree3()
-    {
-        $schema = '
-    <database name="migration" schema="migration">
-        <table name="relation4_user_group" isCrossRef="true">
-            <column name="user_id" type="integer" primaryKey="true"/>
-            <column name="group_id" type="integer" primaryKey="true"/>
-            <column name="group_id2" type="integer" primaryKey="true"/>
-            <column name="relation" type="varchar" primaryKey="true"/>
-
-            <foreign-key foreignTable="relation4_user" phpName="User">
-                <reference local="user_id" foreign="id"/>
-            </foreign-key>
-
-            <foreign-key foreignTable="relation4_group" phpName="Group">
-                <reference local="group_id" foreign="id"/>
-                <reference local="group_id2" foreign="id2"/>
-            </foreign-key>
-        </table>
-
-        <table name="relation4_user">
-            <column name="id" type="integer" primaryKey="true" autoIncrement="true"/>
-            <column name="name" />
-        </table>
-
-        <table name="relation4_group">
-            <column name="id" type="integer" primaryKey="true" autoIncrement="true"/>
-            <column name="id2" type="integer" primaryKey="true"/>
-            <column name="name" />
-        </table>
-
-    </database>
-        ';
-
-        $this->buildAndMigrate($schema);
-
-        \Relation4UserGroupQuery::create()->deleteAll();
-        \Relation4UserQuery::create()->deleteAll();
-        \Relation4GroupQuery::create()->deleteAll();
-
-        $hans = new \Relation4User();
-        $hans->setName('hans');
-
-        $admins = new \Relation4Group();
-        $admins->setName('Admins');
-        $admins->setId2(1);
-
-        $this->assertCount(0, $hans->getGroupRelations(), 'no groups');
-        $hans->addGroup($admins, 'teamLeader');
-        $this->assertCount(1, $hans->getGroupRelations(), 'one groups');
-
-        $hans->save();
-
-        $this->assertEquals(1, \Relation4UserQuery::create()->count(), 'We have one user.');
-        $this->assertEquals(1, \Relation4UserGroupQuery::create()->count(), 'We have one connection.');
-        $this->assertEquals(1, \Relation4UserQuery::create()->filterByGroup($admins)->count(), 'Hans has one group.');
-
-        $hans->removeGroupRelation($admins, 'teamLeader');
-        $this->assertCount(0, $hans->getGroupRelations(), 'no groups');
-
-        $hans->save();
-
-        $this->assertEquals(1, \Relation4UserQuery::create()->count(), 'We have one user.');
-        $this->assertEquals(0, \Relation4UserGroupQuery::create()->count(), 'We have zero connection.');
-        $this->assertEquals(0, \Relation4UserQuery::create()->filterByGroup($admins)->count(), 'Hans has zero groups.');
-    }
-
-    public function testRelationThree4()
-    {
-        $schema = '
-    <database name="migration" schema="migration">
-        <table name="relation5_user_group" isCrossRef="true">
-            <column name="user_id" type="integer" primaryKey="true"/>
-            <column name="group_id" type="integer" primaryKey="true"/>
-            <column name="relation" type="varchar" primaryKey="true"/>
-            <column name="group_id2" type="integer" primaryKey="true"/>
-
-            <foreign-key foreignTable="relation5_group" phpName="Group">
-                <reference local="group_id" foreign="id"/>
-                <reference local="group_id2" foreign="id2"/>
-            </foreign-key>
-
-            <foreign-key foreignTable="relation5_user" phpName="User">
-                <reference local="user_id" foreign="id"/>
-            </foreign-key>
-        </table>
-
-        <table name="relation5_user">
-            <column name="id" type="integer" primaryKey="true" autoIncrement="true"/>
-            <column name="name" />
-        </table>
-
-        <table name="relation5_group">
-            <column name="id" type="integer" primaryKey="true" autoIncrement="true"/>
-            <column name="id2" type="integer" primaryKey="true"/>
-            <column name="name" />
-        </table>
-
-    </database>
-        ';
-
-        $this->buildAndMigrate($schema);
-
-        \Relation5UserGroupQuery::create()->deleteAll();
-        \Relation5UserQuery::create()->deleteAll();
-        \Relation5GroupQuery::create()->deleteAll();
-
-        $hans = new \Relation5User();
-        $hans->setName('hans');
-
-        $admins = new \Relation5Group();
-        $admins->setName('Admins');
-        $admins->setId2(1);
-
-        $this->assertCount(0, $hans->getGroupRelations(), 'no groups');
-        $hans->addGroup($admins, 'teamLeader');
-        $this->assertCount(1, $hans->getGroupRelations(), 'one groups');
-
-        $hans->save();
-
-        $this->assertEquals(1, \Relation5UserQuery::create()->count(), 'We have one user.');
-        $this->assertEquals(1, \Relation5UserGroupQuery::create()->count(), 'We have one connection.');
-        $this->assertEquals(1, \Relation5UserQuery::create()->filterByGroup($admins)->count(), 'Hans has one group.');
-
-        $hans->removeGroupRelation($admins, 'teamLeader');
-        $this->assertCount(0, $hans->getGroupRelations(), 'no groups');
-
-        $hans->save();
-
-        $this->assertEquals(1, \Relation5UserQuery::create()->count(), 'We have one user.');
-        $this->assertEquals(0, \Relation5UserGroupQuery::create()->count(), 'We have zero connection.');
-        $this->assertEquals(0, \Relation5UserQuery::create()->filterByGroup($admins)->count(), 'Hans has zero groups.');
-    }
-
-    public function testRelationThree5()
-    {
-        $schema = '
-    <database name="migration" schema="migration">
-        <table name="relation6_user_group" isCrossRef="true">
-            <column name="user_id" type="integer" primaryKey="true"/>
-            <column name="group_id" type="integer" primaryKey="true"/>
-            <column name="group_id2" type="integer" primaryKey="true"/>
-
-            <foreign-key foreignTable="relation6_group" phpName="Group">
-                <reference local="group_id" foreign="id"/>
-                <reference local="group_id2" foreign="id2"/>
-            </foreign-key>
-
-            <foreign-key foreignTable="relation6_user" phpName="User">
-                <reference local="user_id" foreign="id"/>
-            </foreign-key>
-        </table>
-
-        <table name="relation6_user">
-            <column name="id" type="integer" primaryKey="true" autoIncrement="true"/>
-            <column name="name" />
-        </table>
-
-        <table name="relation6_group">
-            <column name="id" type="integer" primaryKey="true" autoIncrement="true"/>
-            <column name="id2" type="integer" primaryKey="true"/>
-            <column name="name" />
-        </table>
-
-    </database>
-        ';
-
-        $this->buildAndMigrate($schema);
-
-        \Relation6UserGroupQuery::create()->deleteAll();
-        \Relation6UserQuery::create()->deleteAll();
-        \Relation6GroupQuery::create()->deleteAll();
-
-        $hans = new \Relation6User();
-        $hans->setName('hans');
-
-        $admins = new \Relation6Group();
-        $admins->setName('Admins');
-        $admins->setId2(1);
-
-        $this->assertCount(0, $hans->getGroups(), 'no groups');
-        $hans->addGroup($admins);
-        $this->assertCount(1, $hans->getGroups(), 'one groups');
-
-        $hans->save();
-
-        $this->assertEquals(1, \Relation6UserQuery::create()->count(), 'We have one user.');
-        $this->assertEquals(1, \Relation6UserGroupQuery::create()->count(), 'We have one connection.');
-        $this->assertEquals(1, \Relation6UserQuery::create()->filterByGroup($admins)->count(), 'Hans has one group.');
-
-        $hans->removeGroup($admins);
-        $this->assertCount(0, $hans->getGroups(), 'no groups');
-
-        $hans->save();
-
-        $this->assertEquals(1, \Relation6UserQuery::create()->count(), 'We have one user.');
-        $this->assertEquals(0, \Relation6UserGroupQuery::create()->count(), 'We have zero connection.');
-        $this->assertEquals(0, \Relation6UserQuery::create()->filterByGroup($admins)->count(), 'Hans has zero groups.');
-    }
-
 }
