@@ -27,15 +27,15 @@ class GeneratedObjectM2MRelationThreePKsTest extends PlatformDatabaseBuildTimeBa
             <column name="group_id" type="integer" primaryKey="true"/>
             <column name="position_id" type="integer" primaryKey="true"/>
 
-            <foreign-key foreignTable="relation2_user" phpName="User">
+            <foreign-key foreignTable="relation2_user" phpName="User" onDelete="cascade">
                 <reference local="user_id" foreign="id"/>
             </foreign-key>
 
-            <foreign-key foreignTable="relation2_group" phpName="Group">
+            <foreign-key foreignTable="relation2_group" phpName="Group" onDelete="cascade">
                 <reference local="group_id" foreign="id"/>
             </foreign-key>
 
-            <foreign-key foreignTable="relation2_position" phpName="Position">
+            <foreign-key foreignTable="relation2_position" phpName="Position" onDelete="cascade">
                 <reference local="position_id" foreign="id"/>
             </foreign-key>
         </table>
