@@ -26,8 +26,8 @@ class GeneratedObjectM2MRelationThreePKs2Test extends PlatformDatabaseBuildTimeB
         <table name="relationpk_user_group" isCrossRef="true">
             <column name="user_id" type="integer" primaryKey="true"/>
             <column name="group_id" type="integer" primaryKey="true"/>
-            <column name="group_type" type="varchar" primaryKey="true"/>
-            <column name="position" type="varchar" primaryKey="true"/>
+            <column name="group_type" size="64" type="varchar" primaryKey="true"/>
+            <column name="position" type="varchar" size="64" primaryKey="true"/>
 
             <foreign-key foreignTable="relationpk_user" phpName="User">
                 <reference local="user_id" foreign="id"/>
@@ -46,7 +46,7 @@ class GeneratedObjectM2MRelationThreePKs2Test extends PlatformDatabaseBuildTimeB
 
         <table name="relationpk_group">
             <column name="id" type="integer" primaryKey="true" autoIncrement="true"/>
-            <column name="type" type="varchar" primaryKey="true" default="standalone"/>
+            <column name="type" type="varchar" size="64" primaryKey="true" default="standalone"/>
             <column name="name" />
         </table>
 
