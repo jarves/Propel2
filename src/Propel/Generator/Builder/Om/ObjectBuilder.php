@@ -2753,7 +2753,7 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
             $pkCheck[] = 'null !== $this->get' . $pk->getPhpName() . '()';
         }
 
-        $script .= implode(" &&\n            ", $pkCheck);
+        $script .= $pkCheck ? implode(" &&\n            ", $pkCheck) : 'false';
 
         $script .= ";\n";
 
@@ -5017,10 +5017,10 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
 //                    $script .= "
 //            {$foreignObjectName}->set{$local->getPhpName()}(\${$lowerRelatedObjectClassName}->get{$foreign->getPhpName()}());";
 //                }
-                $script .= "
-            {$foreignObjectName}->set{$crossFK->getPhpName()}(\${$lowerRelatedObjectClassName});";
-
                 $relatedObjectClassName      = $this->getFKPhpNameAffix($crossFK, $plural = false);
+                $script .= "
+            {$foreignObjectName}->set{$relatedObjectClassName}(\${$lowerRelatedObjectClassName});";
+
                 $lowerRelatedObjectClassName = lcfirst($relatedObjectClassName);
 
                 $getterName = $this->getCrossRefFKGetterName($crossFKs, $crossFK);
@@ -5039,36 +5039,8 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
                 $script .= "
             {$foreignObjectName}->set{$primaryKey->getPhpName()}(\$$paramName);";
             }
-//        } else {
-//            $crossFK = $crossFKs->getCrossForeignKeys()[0];
-//            $relatedObjectClassName      = $this->getFKPhpNameAffix($crossFK, $plural = false);
-//            $lowerRelatedObjectClassName = lcfirst($relatedObjectClassName);
-//
-//            foreach ($crossFK->getColumnObjectsMapping() as $map) {
-//                $local = $map['local'];
-//                $foreign = $map['foreign'];
-//                $script .= "
-//            {$foreignObjectName}->set{$local->getPhpName()}(\${$lowerRelatedObjectClassName}->get{$foreign->getPhpName()}());";
-//            }
-//
-//            $refFKName = $this->getFKPhpNameAffix($crossFKs->getIncomingForeignKey(), $plural = true);
-//            $relatedObjectClassName      = $this->getFKPhpNameAffix($crossFK, $plural = false);
-//            $lowerRelatedObjectClassName = lcfirst($relatedObjectClassName);
-//            $script .= "
-//            if (\${$lowerRelatedObjectClassName}->is{$refFKName}Loaded()) {
-//                //remove the back reference if available
-//                \${$lowerRelatedObjectClassName}->get{$refFKName}()->removeObject(\$this);
-//            }";
-//        }
-
-//            foreach ($crossFKs->getIncomingForeignKey()->getColumnObjectsMapping() as $map) {
-//                $local = $map['local'];
-//                $foreign = $map['foreign'];
-//                $script .= "
-//            {$foreignObjectName}->set{$local->getPhpName()}(\$this->get{$foreign->getPhpName()}());";
-//            }
             $script .= "
-            {$foreignObjectName}->set{$crossFKs->getIncomingForeignKey()->getPhpName()}(\$this);";
+            {$foreignObjectName}->set{$this->getFKPhpNameAffix($crossFKs->getIncomingForeignKey())}(\$this);";
 
              $script .= "
              //todo, this does not work
@@ -5906,10 +5878,22 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
 
         $script .= "
     /**
-     * Clears the current object and sets all attributes to their default values
+     * Clears the current object, sets all attributes to their default values and removes
+     * outgoing references as well as back-references (from other objects to this one. Results probably in a database
+     * change of those foreign objects when you call `save` there).
      */
     public function clear()
     {";
+
+        foreach ($table->getForeignKeys() as $fk) {
+            $varName = $this->getFKVarName($fk);
+            $removeMethod = 'remove' . $this->getRefFKPhpNameAffix($fk, false);
+            $script .= "
+        if (null !== \$this->$varName) {
+            \$this->$varName->$removeMethod(\$this);
+        }";
+        }
+
         foreach ($table->getColumns() as $col) {
             $clo = $col->getLowercasedName();
             $script .= "
@@ -5945,7 +5929,7 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
 
 
     /**
-     * Adds clearAllReferencers() method which resets all the collections of referencing
+     * Adds clearAllReferences() method which resets all the collections of referencing
      * fk objects.
      * @param string &$script The script will be modified in this method.
      */
@@ -5954,11 +5938,10 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
         $table = $this->getTable();
         $script .= "
     /**
-     * Resets all references to other model objects or collections of model objects.
+     * Resets all references and back-references to other model objects or collections of model objects.
      *
-     * This method is a user-space workaround for PHP's inability to garbage collect
-     * objects with circular references (even in PHP 5.3). This is currently necessary
-     * when using Propel in certain daemon or large-volume/high-memory operations.
+     * This method is used to reset all php object references (not the actual reference in the database).
+     * Necessary for object serialisation.
      *
      * @param      boolean \$deep Whether to also clear the references on all referrer objects.
      */
@@ -6011,12 +5994,8 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
 
         foreach ($table->getForeignKeys() as $fk) {
             $varName = $this->getFKVarName($fk);
-            $removeMethod = 'remove' . $this->getRefFKPhpNameAffix($fk, false);
             $script .= "
-        if (null !== \$this->$varName) {
-            \$this->$varName->$removeMethod(\$this);
-            //\$this->$varName = null;
-        }";
+        \$this->$varName = null;";
         }
 
         $script .= "
