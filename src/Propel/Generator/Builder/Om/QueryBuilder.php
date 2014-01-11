@@ -1266,15 +1266,6 @@ abstract class ".$this->getUnqualifiedClassName()." extends " . $parentClass . "
 
     protected function addFilterByCrossFK(&$script, CrossForeignKeys $crossFKs)
     {
-//        $queryClass = $this->getQueryClassName();
-//        $crossRefTable = $crossFKs->getMiddleTable();
-//        $foreignTable = $crossFKs->getTable();
-//        $fkPhpName =  $foreignTable->getPhpName();
-//        $crossTableName = $crossRefTable->getName();
-//        $relName = $this->getCrossFKsPhpNameAffix($crossFKs, $plural = false);
-//        $objectName = '$' . $foreignTable->getStudlyPhpName();
-//        $relationName = $this->getRefFKPhpNameAffix($crossFKs->getIncomingForeignKey(), $plural = false);
-
         $relationName = $this->getRefFKPhpNameAffix($crossFKs->getIncomingForeignKey(), $plural = false);
 
         foreach ($crossFKs->getCrossForeignKeys() as $crossFK) {

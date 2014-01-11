@@ -335,6 +335,7 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
 
         $this->addBuildCriteria($script);
         $this->addBuildPkeyCriteria($script);
+        $this->addHashCode($script);
         $this->addGetPrimaryKey($script);
         $this->addSetPrimaryKey($script);
         $this->addIsPrimaryKeyNull($script);
@@ -2733,6 +2734,70 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
         $script .= $this->addDoUpdate();
     }
 
+
+    protected function addHashCode(&$script)
+    {
+        $script .= "
+    /**
+     * If the primary key is not null, return the hashcode of the
+     * primary key. Otherwise, return the hash code of the object.
+     *
+     * @return int Hashcode
+     */
+    public function hashCode()
+    {
+        \$validPk = ";
+
+        $pkCheck = [];
+        foreach ($this->getTable()->getPrimaryKey() as $pk) {
+            $pkCheck[] = 'null !== $this->get' . $pk->getPhpName() . '()';
+        }
+
+        $script .= implode(" &&\n            ", $pkCheck);
+
+        $script .= ";\n";
+
+        /** @var $primaryKeyFKs ForeignKey[] */
+        $primaryKeyFKs = [];
+        $foreignKeyPKCount = 0;
+        foreach ($this->getTable()->getForeignKeys() as $foreignKey) {
+            $foreignKeyPKCount += count($foreignKey->getLocalPrimaryKeys());
+            if ($foreignKey->getLocalPrimaryKeys()) {
+                $primaryKeyFKs[] = $foreignKey;
+            }
+        }
+
+        $script .= "
+        \$validPrimaryKeyFKs = " . var_export($foreignKeyPKCount, true) . ";
+        \$primaryKeyFKs = [];
+";
+
+        if ($foreignKeyPKCount) {
+            foreach ($primaryKeyFKs as $foreignKey) {
+                $name = '$this->a' . $this->getFKPhpNameAffix($foreignKey);
+                $script .= "
+        //relation {$foreignKey->getName()} to table {$foreignKey->getForeignTableName()}
+        if ($name && \$hash = spl_object_hash($name)) {
+            \$primaryKeyFKs[] = \$hash;
+        } else {
+            \$validPrimaryKeyFKs = false;
+        }
+";
+            }
+        }
+
+        $script .= "
+        if (\$validPk) {
+            return crc32(json_encode(\$this->getPrimaryKey(), JSON_UNESCAPED_UNICODE));
+        } else if (\$validPrimaryKeyFKs) {
+            return crc32(json_encode(\$primaryKeyFKs));
+        }
+
+        return spl_object_hash(\$this);
+    }
+        ";
+    }
+
     /**
      * Adds the correct getPrimaryKey() method for this object.
      * @param string &$script The script will be modified in this method.
@@ -3740,7 +3805,8 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
     public function remove{$relatedObjectClassName}(\${$lowerRelatedObjectClassName})
     {
         if (\$this->get{$relatedName}()->contains(\${$lowerRelatedObjectClassName})) {
-            \$this->{$collName}->remove(\$this->{$collName}->search(\${$lowerRelatedObjectClassName}));
+            \$pos = \$this->{$collName}->search(\${$lowerRelatedObjectClassName});
+            \$this->{$collName}->remove(\$pos);
             if (null === \$this->{$inputCollection}) {
                 \$this->{$inputCollection} = clone \$this->{$collName};
                 \$this->{$inputCollection}->clear();
@@ -3940,13 +4006,6 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
                     foreach (\$this->{$scheduledForDeletionVarName} as \$combination) {
                         \$entryPk = [];
 ";
-            /**
-             * $pk => User
-             * $combination
-             *    0: Group
-             *    1: RelationId
-             */
-
             foreach ($crossFKs->getIncomingForeignKey()->getColumnObjectsMapping() as $reference) {
                 $local   = $reference['local'];
                 $foreign = $reference['foreign'];
@@ -4048,7 +4107,7 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
             foreach ($crossFKs->getCrossForeignKeys() as $crossFK) {
                 $script .= "
                     //\$combination[$combinationIdx] = {$crossFK->getForeignTable()->getPhpName()} ({$crossFK->getName()})
-                    if (\$combination[$combinationIdx]->isModified()) {
+                    if (!\$combination[$combinationIdx]->isDeleted() && (\$combination[$combinationIdx]->isNew() || \$combination[$combinationIdx]->isModified())) {
                         \$combination[$combinationIdx]->save(\$con);
                     }
                 ";
@@ -4075,7 +4134,7 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
                 $script .= "
             if (\$this->coll{$relatedName}) {
                 foreach (\$this->coll{$relatedName} as \${$lowerSingleRelatedName}) {
-                    if (\${$lowerSingleRelatedName}->isModified()) {
+                    if (!\${$lowerSingleRelatedName}->isDeleted() && (\${$lowerSingleRelatedName}->isNew() || \${$lowerSingleRelatedName}->isModified())) {
                         \${$lowerSingleRelatedName}->save(\$con);
                     }
                 }
@@ -4561,8 +4620,6 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
         $refFK = $crossFKs->getIncomingForeignKey();
         $selfRelationName = $this->getFKPhpNameAffix($refFK, $plural = false);
 
-        $relatedQueryClassName = $this->getClassNameFromBuilder($this->getNewStubQueryBuilder($crossFKs->getMiddleTable()));
-
         $multi = 1 < count($crossFKs->getCrossForeignKeys()) || !!$crossFKs->getUnclassifiedPrimaryKeys();
 
         $relatedName       = $this->getCrossFKsPhpNameAffix($crossFKs, true);
@@ -4571,10 +4628,12 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
         if ($multi) {
             list($relatedObjectClassName) = $this->getCrossFKInformation($crossFKs);
             $collName = 'combination' . ucfirst($this->getCrossFKsVarName($crossFKs));
+            $relatedQueryClassName = $this->getClassNameFromBuilder($this->getNewStubQueryBuilder($crossFKs->getMiddleTable()));
         } else {
             $crossFK = $crossFKs->getCrossForeignKeys()[0];
             $relatedObjectClassName = $this->getNewStubObjectBuilder($crossFK->getForeignTable())->getUnqualifiedClassName();
             $collName = $this->getCrossFKVarName($crossFK);
+            $relatedQueryClassName = $this->getClassNameFromBuilder($this->getNewStubQueryBuilder($crossFK->getForeignTable()));
         }
 
 
@@ -4947,17 +5006,19 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
         if (\$this->get{$relCol}()->contains({$shortSignature})) {
             {$foreignObjectName} = new {$className}();
 ";
-        if (1 < count($crossFKs->getCrossForeignKeys()) || $crossFKs->getUnclassifiedPrimaryKeys()) {
+//        if (1 < count($crossFKs->getCrossForeignKeys()) || $crossFKs->getUnclassifiedPrimaryKeys()) {
             foreach ($crossFKs->getCrossForeignKeys() as $crossFK) {
                 $relatedObjectClassName = $this->getFKPhpNameAffix($crossFK, $plural = false);
                 $lowerRelatedObjectClassName = lcfirst($relatedObjectClassName);
 
-                foreach ($crossFK->getColumnObjectsMapping() as $map) {
-                    $local = $map['local'];
-                    $foreign = $map['foreign'];
-                    $script .= "
-            {$foreignObjectName}->set{$local->getPhpName()}(\${$lowerRelatedObjectClassName}->get{$foreign->getPhpName()}());";
-                }
+//                foreach ($crossFK->getColumnObjectsMapping() as $map) {
+//                    $local = $map['local'];
+//                    $foreign = $map['foreign'];
+//                    $script .= "
+//            {$foreignObjectName}->set{$local->getPhpName()}(\${$lowerRelatedObjectClassName}->get{$foreign->getPhpName()}());";
+//                }
+                $script .= "
+            {$foreignObjectName}->set{$crossFK->getPhpName()}(\${$lowerRelatedObjectClassName});";
 
                 $relatedObjectClassName      = $this->getFKPhpNameAffix($crossFK, $plural = false);
                 $lowerRelatedObjectClassName = lcfirst($relatedObjectClassName);
@@ -4976,40 +5037,43 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
             foreach ($crossFKs->getUnclassifiedPrimaryKeys() as $primaryKey) {
                 $paramName = lcfirst($primaryKey->getPhpName());
                 $script .= "
-            {$foreignObjectName}->set{$primaryKey->getPhpName()}(\$$paramName);
-";
+            {$foreignObjectName}->set{$primaryKey->getPhpName()}(\$$paramName);";
             }
-        } else {
-            $crossFK = $crossFKs->getCrossForeignKeys()[0];
-            $relatedObjectClassName      = $this->getFKPhpNameAffix($crossFK, $plural = false);
-            $lowerRelatedObjectClassName = lcfirst($relatedObjectClassName);
+//        } else {
+//            $crossFK = $crossFKs->getCrossForeignKeys()[0];
+//            $relatedObjectClassName      = $this->getFKPhpNameAffix($crossFK, $plural = false);
+//            $lowerRelatedObjectClassName = lcfirst($relatedObjectClassName);
+//
+//            foreach ($crossFK->getColumnObjectsMapping() as $map) {
+//                $local = $map['local'];
+//                $foreign = $map['foreign'];
+//                $script .= "
+//            {$foreignObjectName}->set{$local->getPhpName()}(\${$lowerRelatedObjectClassName}->get{$foreign->getPhpName()}());";
+//            }
+//
+//            $refFKName = $this->getFKPhpNameAffix($crossFKs->getIncomingForeignKey(), $plural = true);
+//            $relatedObjectClassName      = $this->getFKPhpNameAffix($crossFK, $plural = false);
+//            $lowerRelatedObjectClassName = lcfirst($relatedObjectClassName);
+//            $script .= "
+//            if (\${$lowerRelatedObjectClassName}->is{$refFKName}Loaded()) {
+//                //remove the back reference if available
+//                \${$lowerRelatedObjectClassName}->get{$refFKName}()->removeObject(\$this);
+//            }";
+//        }
 
-            foreach ($crossFK->getColumnObjectsMapping() as $map) {
-                $local = $map['local'];
-                $foreign = $map['foreign'];
-                $script .= "
-            {$foreignObjectName}->set{$local->getPhpName()}(\${$lowerRelatedObjectClassName}->get{$foreign->getPhpName()}());";
-            }
-
-            $refFKName = $this->getFKPhpNameAffix($crossFKs->getIncomingForeignKey(), $plural = true);
-            $relatedObjectClassName      = $this->getFKPhpNameAffix($crossFK, $plural = false);
-            $lowerRelatedObjectClassName = lcfirst($relatedObjectClassName);
+//            foreach ($crossFKs->getIncomingForeignKey()->getColumnObjectsMapping() as $map) {
+//                $local = $map['local'];
+//                $foreign = $map['foreign'];
+//                $script .= "
+//            {$foreignObjectName}->set{$local->getPhpName()}(\$this->get{$foreign->getPhpName()}());";
+//            }
             $script .= "
-            if (\${$lowerRelatedObjectClassName}->is{$refFKName}Loaded()) {
-                //remove the back reference if available
-                \${$lowerRelatedObjectClassName}->get{$refFKName}()->removeObject(\$this);
-            }";
-        }
-
-            foreach ($crossFKs->getIncomingForeignKey()->getColumnObjectsMapping() as $map) {
-                $local = $map['local'];
-                $foreign = $map['foreign'];
-                $script .= "
-            {$foreignObjectName}->set{$local->getPhpName()}(\$this->get{$foreign->getPhpName()}());";
-            }
+            {$foreignObjectName}->set{$crossFKs->getIncomingForeignKey()->getPhpName()}(\$this);";
 
              $script .= "
-            \$this->remove{$refKObjectClassName}({$foreignObjectName});
+             //todo, this does not work
+            \$this->remove{$refKObjectClassName}(clone {$foreignObjectName});
+            {$foreignObjectName}->clear();
 
             \$this->{$collName}->remove(\$this->{$collName}->search({$shortSignature}));
             ";
@@ -5947,8 +6011,12 @@ abstract class ".$this->getUnqualifiedClassName().$parentClass." implements Acti
 
         foreach ($table->getForeignKeys() as $fk) {
             $varName = $this->getFKVarName($fk);
+            $removeMethod = 'remove' . $this->getRefFKPhpNameAffix($fk, false);
             $script .= "
-        \$this->$varName = null;";
+        if (null !== \$this->$varName) {
+            \$this->$varName->$removeMethod(\$this);
+            //\$this->$varName = null;
+        }";
         }
 
         $script .= "

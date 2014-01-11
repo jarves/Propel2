@@ -825,6 +825,10 @@ class ".$this->getUnqualifiedClassName()." extends TableMap
         $n = 0;
 
         if ($table->hasCompositePrimaryKey()) {
+            $script .= "
+            \$pks = [];
+            ";
+
             $pks = array();
             foreach ($table->getColumns() as $col) {
                 if (!$col->isLazyLoad()) {

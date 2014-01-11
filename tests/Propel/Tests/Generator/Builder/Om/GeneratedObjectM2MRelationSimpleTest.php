@@ -69,7 +69,7 @@ class GeneratedObjectM2MRelationSimpleTest extends PlatformDatabaseBuildTimeBase
         $friend1 = (new \Relation1User())->setName('Friend 1');
         $friend2 = (new \Relation1User())->setName('Friend 2');
         $hans->addFriend($friend1);
-        $this->assertCount(1, $hans->getFriends(), 'one friends');
+        $this->assertCount(1, $hans->getFriends(), 'one friend');
 
         $hans->addFriend($friend2);
         $this->assertCount(2, $hans->getFriends(), 'two friends');
@@ -97,8 +97,8 @@ class GeneratedObjectM2MRelationSimpleTest extends PlatformDatabaseBuildTimeBase
         $friend2 = (new \Relation1User())->setName('Friend 2');
         $hans->addFriend($friend1);
         $hans->addFriend($friend2);
-        $this->assertEquals($hans, current($friend1->getWhos()), 'Hans is friend1\'s friend.');
-        $this->assertEquals($hans, current($friend2->getWhos()), 'Hans is friend2\'s friend.');
+        $this->assertEquals($hans, $friend1->getWhos()->getFirst(), 'Hans is friend1\'s friend.');
+        $this->assertEquals($hans, $friend2->getWhos()->getFirst(), 'Hans is friend2\'s friend.');
         $hans->save();
         $this->assertCount(1, $friend1->getWhos(), 'Friend 1 is from one guy (hans) a friend');
         $this->assertEquals(3, \Relation1UserQuery::create()->count(), 'We have three users.');
@@ -107,12 +107,12 @@ class GeneratedObjectM2MRelationSimpleTest extends PlatformDatabaseBuildTimeBase
 
         $hans->removeFriend($friend1);
         $this->assertCount(0, $friend1->getWhos(), 'Friend 1 is from nobody a friend');
-        $this->assertEquals($hans, current($friend2->getWhos()), 'Hans is friend2\'s friend.');
-        $this->assertCount(1, $hans->getFriends(), 'one friends');
+        $this->assertEquals($hans, $friend2->getWhos()->getFirst(), 'Hans is friend2\'s friend.');
+        $this->assertCount(1, $hans->getFriends(), 'one friend');
 
         $hans->save();
         $this->assertCount(0, $friend1->getWhos(), 'Friend 1 is from nobody a friend');
-        $this->assertEquals($hans, current($friend2->getWhos()), 'Hans is friend2\'s friend.');
+        $this->assertEquals($hans, $friend2->getWhos()->getFirst(), 'Hans is friend2\'s friend.');
 
         $this->assertEquals(3, \Relation1UserQuery::create()->count(), 'We have three users.');
         $this->assertEquals(1, \Relation1UserFriendQuery::create()->count(), 'We have one connection.');
@@ -220,7 +220,8 @@ class GeneratedObjectM2MRelationSimpleTest extends PlatformDatabaseBuildTimeBase
         $friend1 = \Relation1UserQuery::create()->findOneByName('Friend 1');
         $friend2 = \Relation1UserQuery::create()->findOneByName('Friend 2');
 
-        $this->assertSame($friend2, current($newHansObject->getFriends()));
+        $this->assertSame($friend2, $newHansObject->getFriends()->getFirst());
+        $this->assertCount(1, $newHansObject->getFriends());
         $newHansObject->removeFriend($friend2);
         $this->assertCount(0, $newHansObject->getFriends());
         $newHansObject->save();
@@ -364,7 +365,7 @@ class GeneratedObjectM2MRelationSimpleTest extends PlatformDatabaseBuildTimeBase
         $this->assertCount(2, $newHansObject->getFriends());
         $newHansObject->removeFriend($friend1);
         $this->assertCount(1, $newHansObject->getFriends());
-        $this->assertEquals($friend2, current($newHansObject->getFriends()));
+        $this->assertEquals($friend2, $newHansObject->getFriends()->getFirst());
         $newHansObject->save();
 
         \Map\Relation1UserTableMap::clearInstancePool();
@@ -463,7 +464,7 @@ class GeneratedObjectM2MRelationSimpleTest extends PlatformDatabaseBuildTimeBase
         $this->assertEquals(3, \Relation1UserQuery::create()->count(), 'We have three users.');
         $this->assertEquals(2, \Relation1UserFriendQuery::create()->count(), 'We have two connections.');
         $this->assertEquals(2, \Relation1UserQuery::create()->filterByWho($hans)->count(), 'Hans has two friends.');
-        $this->assertEquals($friends, \Relation1UserQuery::create()->filterByWho($hans)->find());
+        $this->assertEquals($friends->getArrayCopy(), \Relation1UserQuery::create()->filterByWho($hans)->find()->getArrayCopy());
 
 
         $friends = new ObjectCollection();
@@ -476,7 +477,7 @@ class GeneratedObjectM2MRelationSimpleTest extends PlatformDatabaseBuildTimeBase
         $this->assertEquals(5, \Relation1UserQuery::create()->count(), 'We have five users.');
         $this->assertEquals(2, \Relation1UserFriendQuery::create()->count(), 'We have two connections.');
         $this->assertEquals(2, \Relation1UserQuery::create()->filterByWho($hans)->count(), 'Hans has two friends.');
-        $this->assertEquals($friends, \Relation1UserQuery::create()->filterByWho($hans)->find());
+        $this->assertEquals($friends->getArrayCopy(), \Relation1UserQuery::create()->filterByWho($hans)->find()->getArrayCopy());
 
     }
 
@@ -542,6 +543,7 @@ class GeneratedObjectM2MRelationSimpleTest extends PlatformDatabaseBuildTimeBase
 
         //get new instance of $hans and fire addFriend
         \Map\Relation1UserTableMap::clearInstancePool();
+        /** @var $newHansObject \Relation1User */
         $newHansObject = \Relation1UserQuery::create()->findOneByName('hans');
         $friend2 = (new \Relation1User())->setName('Friend 2');
         $friend2->save();
@@ -585,9 +587,11 @@ class GeneratedObjectM2MRelationSimpleTest extends PlatformDatabaseBuildTimeBase
 
     }
 
-    /*
+    /**
      * ####################################
      * Special: addFriend, addFriend, removeFriend
+     *
+     * @group test
      */
     public function testAddAddRemove()
     {
@@ -600,13 +604,13 @@ class GeneratedObjectM2MRelationSimpleTest extends PlatformDatabaseBuildTimeBase
         $friend1 = (new \Relation1User())->setName('Friend 1');
         $friend2 = (new \Relation1User())->setName('Friend 2');
         $hans->addFriend($friend1);
-        $this->assertCount(1, $hans->getFriends(), 'one friends');
+        $this->assertCount(1, $hans->getFriends(), 'one friend');
 
         $hans->addFriend($friend2);
         $this->assertCount(2, $hans->getFriends(), 'two friends');
 
         $hans->removeFriend($friend1);
-        $this->assertCount(1, $hans->getFriends(), 'one friends');
+        $this->assertCount(1, $hans->getFriends(), 'one friend');
 
         $hans->save();
         $this->assertEquals(2, \Relation1UserQuery::create()->count(), 'We have two users.');
@@ -635,7 +639,7 @@ class GeneratedObjectM2MRelationSimpleTest extends PlatformDatabaseBuildTimeBase
         $this->assertCount(2, $hans->getFriends(), 'two friends');
 
         $hans->removeFriend($friend2);
-        $this->assertCount(1, $hans->getFriends(), 'one friends');
+        $this->assertCount(1, $hans->getFriends(), 'one friend');
 
         $hans->save();
         $this->assertEquals(2, \Relation1UserQuery::create()->count(), 'We have two users.');
