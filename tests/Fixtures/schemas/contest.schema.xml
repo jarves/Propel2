@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="no"?>
+<database name="bookstore-schemas" defaultIdMethod="native"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="../../../generator/resources/xsd/database.xsd"
+          schema="contest"
+          namespace="Propel\Tests\ContestSchema">
+
+  <table name="customer">
+    <column name="id" type="INTEGER" primaryKey="true" autoIncrement="true"/>
+    <column name="name" type="varchar" />
+  </table>
+
+</database>

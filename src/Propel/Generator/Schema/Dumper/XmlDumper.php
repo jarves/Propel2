@@ -105,7 +105,7 @@ class XmlDumper implements DumperInterface
         }
 
         if ($namespace = $database->getNamespace()) {
-            $databaseNode->setAttribute('namespace', $namespace);
+            $databaseNode->setAttribute('namespace', ltrim($namespace, '\\'));
         }
 
         if ($baseClass = $database->getBaseClass()) {
@@ -207,7 +207,7 @@ class XmlDumper implements DumperInterface
         }
 
         if ($namespace = $table->getNamespace()) {
-            $tableNode->setAttribute('namespace', $namespace);
+            $tableNode->setAttribute('namespace', ltrim($namespace, '\\'));
         }
 
         if ($table->isSkipSql()) {

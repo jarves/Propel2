@@ -1018,7 +1018,7 @@ class Table extends ScopedMappingModel implements IdMethod
      */
     public function guessSchemaName()
     {
-        return $this->schema ?: $this->database->getSchema();
+        return $this->schema ?: ($this->database ? $this->database->getSchema() : null);
     }
 
     /**

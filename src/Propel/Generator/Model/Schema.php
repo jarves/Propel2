@@ -265,19 +265,23 @@ class Schema
                     // temporarily reset database namespace to avoid double namespace decoration (see ticket #1355)
                     $namespace = $db->getNamespace();
                     $db->setNamespace(null);
+
                     // join tables
                     foreach ($addDb->getTables() as $addTable) {
-                        if ($db->getTable($addTable->getName())) {
+                        if ($db->hasTable($addTable->getName())) {
                             throw new EngineException(sprintf('Duplicate table found: %s.', $addTable->getName()));
                         }
                         $db->addTable($addTable);
-                    }
-                    // join database behaviors
-                    foreach ($addDb->getBehaviors() as $addBehavior) {
-                        if (!$db->hasBehavior($addBehavior->getName())) {
-                            $db->addBehavior($addBehavior);
+
+                        //add behavior from the database to each table, since we can not merge those to the
+                        //target database because we would have there then behaviors applied to all tables
+                        foreach ((array)$addDb->getBehaviors() as $addBehavior) {
+                            if (!$addTable->hasBehavior($addBehavior->getName())) {
+                                $addTable->addBehavior($addBehavior);
+                            }
                         }
                     }
+
                     // restore the database namespace
                     $db->setNamespace($namespace);
                 } else {

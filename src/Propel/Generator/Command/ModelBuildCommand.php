@@ -75,8 +75,6 @@ class ModelBuildCommand extends AbstractCommand
                 'Identifier quoting may result in undesired behavior (especially in Postgres)')
             ->addOption('target-package', null, InputOption::VALUE_REQUIRED,
                 '', '')
-            ->addOption('enable-package-object-model', null, InputOption::VALUE_NONE,
-                '')
             ->addOption('disable-namespace-auto-package', null, InputOption::VALUE_NONE,
                 'Disable namespace auto-packaging')
             ->addOption('composer-dir', null, InputOption::VALUE_REQUIRED,
@@ -106,7 +104,6 @@ class ModelBuildCommand extends AbstractCommand
             'propel.builder.composer.dir'               => $input->getOption('composer-dir'),
             'propel.disableIdentifierQuoting'           => !$input->getOption('enable-identifier-quoting'),
             'propel.targetPackage'                      => $input->getOption('target-package'),
-            'propel.packageObjectModel'                 => $input->getOption('enable-package-object-model'),
             'propel.namespace.autoPackage'              => !$input->getOption('disable-namespace-auto-package'),
             'propel.addGenericAccessors'                => true,
             'propel.addGenericMutators'                 => true,

@@ -42,100 +42,95 @@ class ModelManager extends AbstractManager
         $this->validate();
 
         $totalNbFiles    = 0;
-        $dataModels      = $this->getDataModels();
         $generatorConfig = $this->getGeneratorConfig();
 
         $this->log('Generating PHP files...');
 
-        foreach ($dataModels as $dataModel) {
-            $this->log('Datamodel: ' . $dataModel->getName());
+        foreach ($this->getDatabases() as $database) {
+            if ($this->getGeneratorConfig()->getBuildProperty('disableIdentifierQuoting')) {
+                $database->getPlatform()->setIdentifierQuoting(false);
+            }
 
-            foreach ($dataModel->getDatabases() as $database) {
-                if ($this->getGeneratorConfig()->getBuildProperty('disableIdentifierQuoting')) {
-                    $database->getPlatform()->setIdentifierQuoting(false);
-                }
+            $this->log(' - Database: ' . $database->getName());
 
-                $this->log(' - Database: ' . $database->getName());
+            foreach ($database->getTables() as $table) {
+                if (!$table->isForReferenceOnly()) {
+                    $nbWrittenFiles = 0;
+                    $this->log('  + Table: ' . $table->getName());
 
-                foreach ($database->getTables() as $table) {
-                    if (!$table->isForReferenceOnly()) {
-                        $nbWrittenFiles = 0;
-                        $this->log('  + Table: ' . $table->getName());
+                    // -----------------------------------------------------------------------------------------
+                    // Create Object, and TableMap classes
+                    // -----------------------------------------------------------------------------------------
 
-                        // -----------------------------------------------------------------------------------------
-                        // Create Object, and TableMap classes
-                        // -----------------------------------------------------------------------------------------
+                    // these files are always created / overwrite any existing files
+                    foreach (array('object', 'tablemap', 'query') as $target) {
+                        $builder = $generatorConfig->getConfiguredBuilder($table, $target);
+                        $nbWrittenFiles += $this->doBuild($builder);
+                    }
 
-                        // these files are always created / overwrite any existing files
-                        foreach (array('object', 'tablemap', 'query') as $target) {
-                            $builder = $generatorConfig->getConfiguredBuilder($table, $target);
-                            $nbWrittenFiles += $this->doBuild($builder);
-                        }
+                    // -----------------------------------------------------------------------------------------
+                    // Create [empty] stub Object classes if they don't exist
+                    // -----------------------------------------------------------------------------------------
 
-                        // -----------------------------------------------------------------------------------------
-                        // Create [empty] stub Object classes if they don't exist
-                        // -----------------------------------------------------------------------------------------
+                    // these classes are only generated if they don't already exist
+                    $overwrite = false;
+                    foreach (array('objectstub', 'querystub') as $target) {
+                        $builder = $generatorConfig->getConfiguredBuilder($table, $target);
+                        $nbWrittenFiles += $this->doBuild($builder, $overwrite);
+                    }
 
-                        // these classes are only generated if they don't already exist
-                        $overwrite = false;
-                        foreach (array('objectstub', 'querystub') as $target) {
-                            $builder = $generatorConfig->getConfiguredBuilder($table, $target);
-                            $nbWrittenFiles += $this->doBuild($builder, $overwrite);
-                        }
+                    // -----------------------------------------------------------------------------------------
+                    // Create [empty] stub child Object classes if they don't exist
+                    // -----------------------------------------------------------------------------------------
 
-                        // -----------------------------------------------------------------------------------------
-                        // Create [empty] stub child Object classes if they don't exist
-                        // -----------------------------------------------------------------------------------------
-
-                        // If table has enumerated children (uses inheritance) then create the empty child stub classes if they don't already exist.
-                        if ($col = $table->getChildrenColumn()) {
-                            if ($col->isEnumeratedClasses()) {
-                                foreach ($col->getChildren() as $child) {
-                                    $overwrite = true;
-                                    foreach (array('queryinheritance') as $target) {
-                                        if (!$child->getAncestor() && $child->getClassName() == $table->getPhpName()) {
-                                            continue;
-                                        }
-                                        $builder = $generatorConfig->getConfiguredBuilder($table, $target);
-                                        $builder->setChild($child);
-                                        $nbWrittenFiles += $this->doBuild($builder, $overwrite);
+                    // If table has enumerated children (uses inheritance) then create the empty child stub classes if they don't already exist.
+                    if ($col = $table->getChildrenColumn()) {
+                        if ($col->isEnumeratedClasses()) {
+                            foreach ($col->getChildren() as $child) {
+                                $overwrite = true;
+                                foreach (array('queryinheritance') as $target) {
+                                    if (!$child->getAncestor() && $child->getClassName() == $table->getPhpName()) {
+                                        continue;
                                     }
-                                    $overwrite = false;
-                                    foreach (array('objectmultiextend', 'queryinheritancestub') as $target) {
-                                        $builder = $generatorConfig->getConfiguredBuilder($table, $target);
-                                        $builder->setChild($child);
-                                        $nbWrittenFiles += $this->doBuild($builder, $overwrite);
-                                    }
+                                    $builder = $generatorConfig->getConfiguredBuilder($table, $target);
+                                    $builder->setChild($child);
+                                    $nbWrittenFiles += $this->doBuild($builder, $overwrite);
+                                }
+                                $overwrite = false;
+                                foreach (array('objectmultiextend', 'queryinheritancestub') as $target) {
+                                    $builder = $generatorConfig->getConfiguredBuilder($table, $target);
+                                    $builder->setChild($child);
+                                    $nbWrittenFiles += $this->doBuild($builder, $overwrite);
                                 }
                             }
                         }
+                    }
 
-                        // -----------------------------------------------------------------------------------------
-                        // Create [empty] Interface if it doesn't exist
-                        // -----------------------------------------------------------------------------------------
+                    // -----------------------------------------------------------------------------------------
+                    // Create [empty] Interface if it doesn't exist
+                    // -----------------------------------------------------------------------------------------
 
-                        // Create [empty] interface if it does not already exist
-                        $overwrite = false;
-                        if ($table->getInterface()) {
-                            $builder = $generatorConfig->getConfiguredBuilder($table, 'interface');
-                            $nbWrittenFiles += $this->doBuild($builder, $overwrite);
+                    // Create [empty] interface if it does not already exist
+                    $overwrite = false;
+                    if ($table->getInterface()) {
+                        $builder = $generatorConfig->getConfiguredBuilder($table, 'interface');
+                        $nbWrittenFiles += $this->doBuild($builder, $overwrite);
+                    }
+
+                    // ----------------------------------
+                    // Create classes added by behaviors
+                    // ----------------------------------
+                    if ($table->hasAdditionalBuilders()) {
+                        foreach ($table->getAdditionalBuilders() as $builderClass) {
+                            $builder = new $builderClass($table);
+                            $builder->setGeneratorConfig($generatorConfig);
+                            $nbWrittenFiles += $this->doBuild($builder, isset($builder->overwrite) ? $builder->overwrite : true);
                         }
+                    }
 
-                        // ----------------------------------
-                        // Create classes added by behaviors
-                        // ----------------------------------
-                        if ($table->hasAdditionalBuilders()) {
-                            foreach ($table->getAdditionalBuilders() as $builderClass) {
-                                $builder = new $builderClass($table);
-                                $builder->setGeneratorConfig($generatorConfig);
-                                $nbWrittenFiles += $this->doBuild($builder, isset($builder->overwrite) ? $builder->overwrite : true);
-                            }
-                        }
-
-                        $totalNbFiles += $nbWrittenFiles;
-                        if (0 === $nbWrittenFiles) {
-                            $this->log("\t\t(no change)");
-                        }
+                    $totalNbFiles += $nbWrittenFiles;
+                    if (0 === $nbWrittenFiles) {
+                        $this->log("\t\t(no change)");
                     }
                 }
             }

@@ -465,9 +465,13 @@ class Database extends ScopedMappingModel
             return $this->addTable($tbl);
         }
 
+        if ($this->getSchema() && $table->guessSchemaName() != $this->getSchema()) {
+            $table->setSchema($table->guessSchemaName());
+        }
+
         $table->setDatabase($this);
 
-        if (isset($this->tablesByName[$table->getName()])) {
+        if ($this->hasTable($table->getName())) {
             throw new EngineException(sprintf('Table "%s" declared twice', $table->getName()));
         }
 
@@ -592,27 +596,23 @@ class Database extends ScopedMappingModel
      * absolute table namespace and the database namespace.
      *
      * @param  Table  $table
-     * @return string
      */
     private function computeTableNamespace(Table $table)
     {
         $namespace = $table->getNamespace();
-        if ($this->isAbsoluteNamespace($namespace)) {
-            $namespace = ltrim($namespace, '\\');
-            $table->setNamespace($namespace);
+        if (!$this->isAbsoluteNamespace($namespace)) {
+            if ($namespace = $this->getNamespace()) {
+                if ($table->getNamespace()) {
+                    $namespace .= '\\' . $table->getNamespace();
+                }
 
-            return $namespace;
-        }
+                if (!$this->isAbsoluteNamespace($namespace)) {
+                    $namespace = '\\' . $namespace;
+                }
 
-        if ($namespace = $this->getNamespace()) {
-            if ($table->getNamespace()) {
-                $namespace .= '\\'.$table->getNamespace();
+                $table->setNamespace($namespace);
             }
-
-            $table->setNamespace($namespace);
         }
-
-        return $namespace;
     }
 
     /**

@@ -28,9 +28,11 @@ use Propel\Generator\Model\Schema;
 abstract class AbstractManager
 {
     /**
-     * Data models that we collect. One from each XML schema file.
+     * Merged DataModel with several databases in it
+     *
+     * @var Schema
      */
-    protected $dataModels = array();
+    protected $schemaModel;
 
     /**
      * @var Database[]
@@ -138,22 +140,6 @@ abstract class AbstractManager
         return $this->workingDirectory;
     }
 
-
-    /**
-     * Returns the data models that have been
-     * processed.
-     *
-     * @return Schema[]
-     */
-    public function getDataModels()
-    {
-        if (!$this->dataModelsLoaded) {
-            $this->loadDataModels();
-        }
-
-        return $this->dataModels;
-    }
-
     /**
      * Returns the data model to database name map.
      *
@@ -174,23 +160,7 @@ abstract class AbstractManager
     public function getDatabases()
     {
         if (null === $this->databases) {
-            $databases = array();
-            foreach ($this->getDataModels() as $dataModel) {
-                foreach ($dataModel->getDatabases() as $database) {
-                    if (!isset($databases[$database->getName()])) {
-                        $databases[$database->getName()] = $database;
-                    } else {
-                        $tables = $database->getTables();
-                        // Merge tables from different schema.xml to the same database
-                        foreach ($tables as $table) {
-                            if (!$databases[$database->getName()]->hasTable($table->getName(), true)) {
-                                $databases[$database->getName()]->addTable($table);
-                            }
-                        }
-                    }
-                }
-            }
-            $this->databases = $databases;
+            $this->loadDataModels();
         }
 
         return $this->databases;
@@ -327,15 +297,11 @@ abstract class AbstractManager
             $this->dataModelDbMap[$schema->getName()] = $schema->getDatabase(null, false)->getName();
         }
 
-        if (count($schemas) > 1 && $this->getGeneratorConfig()->getBuildProperty('packageObjectModel')) {
-            $schema = $this->joinDataModels($schemas);
-            $this->dataModels = array($schema);
-        } else {
-            $this->dataModels = $schemas;
-        }
+        $this->schemaModel = $this->joinDataModels($schemas);
 
-        foreach ($this->dataModels as &$schema) {
-            $schema->doFinalInitialization();
+        $this->databases = array();
+        foreach ($this->schemaModel->getDatabases() as $database) { //triggers doFinalInitialization
+            $this->databases[$database->getName()] = $database;
         }
 
         $this->dataModelsLoaded = true;

@@ -51,7 +51,7 @@ class SchemaTest extends ModelTestCase
         ;
         $database2
             ->expects($this->any())
-            ->method('getTable')
+            ->method('hasTable')
             ->with($this->equalTo('books'))
             ->will($this->returnValue(true))
         ;

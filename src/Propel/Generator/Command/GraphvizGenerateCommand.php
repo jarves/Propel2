@@ -44,7 +44,6 @@ class GraphvizGenerateCommand extends AbstractCommand
     {
         $generatorConfig = $this->getGeneratorConfig(array(
             'propel.platform.class'     => $input->getOption('platform'),
-            'propel.packageObjectModel' => true,
         ), $input);
 
         $this->createDirectory($input->getOption('output-dir'));

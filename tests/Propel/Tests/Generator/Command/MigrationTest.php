@@ -61,7 +61,7 @@ class MigrationTest extends TestCaseFixturesDatabase
         $this->assertEquals(0, $result, 'migration:diff tests exited successfully');
 
         $files = glob($this->outputDir . '/PropelMigration_*.php');
-        $this->assertGreaterThanOrEqual(1, count($files));
+        $this->assertGreaterThanOrEqual(1, count($files), 'we have one migration file in ' . $this->outputDir);
         $file = $files[0];
 
         $content = file_get_contents($file);

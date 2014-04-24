@@ -22,4 +22,3 @@ propel.database.password            = ##DATABASE_PASSWORD##
 # propel.database.createUrl = (doesn't apply for SQLite, since db is auto-created)
 
 propel.targetPackage                = bookstore-packaged
-propel.packageObjectModel           = true
