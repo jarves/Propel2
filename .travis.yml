@@ -22,6 +22,9 @@ before_script:
 script:
   - ./tests/bin/phpunit.$DB.sh;
 
+after_script:
+  - CODECLIMATE_REPO_TOKEN=92d285429bca0648ada4573f9673251098c1f33ed4ffd5106a10bcf5b9e151a8 ./vendor/bin/test-reporter --stdout > codeclimate.json
+  - curl -X POST -d @codeclimate.json -H 'Content-Type: application/json' -H 'User-Agent: Code Climate (PHP Test Reporter v0.1.1)' https://codeclimate.com/test_reports
 
 matrix:
   fast_finish: true
@@ -33,6 +36,3 @@ matrix:
       env: DB=pgsql DB_USER=postgres DB_NAME=postgres  # driver currently unsupported by HHVM
     - php: hhvm
       env: DB=sqlite # some issues at the moment
-
-#after_script:
-#  - php vendor/bin/coveralls -v
